@@ -140,9 +140,7 @@
         </div>
 
         <div class="record-actions" id="record-actions" style="display:none;">
-          <button class="btn btn-primary btn-large" onclick="saveAllRecords()">
-            💾 บันทึกข้อมูลทั้งหมด
-          </button>
+          <div class="static-notice">🔒 ดูข้อมูลเท่านั้น — หากต้องการบันทึก กรุณาใช้งานผ่าน localhost</div>
         </div>
       </div>
     </section>
@@ -184,7 +182,7 @@
           <p class="page-sub">จัดการข้อมูลเครื่องพิมพ์ทั้งหมด</p>
         </div>
         <div class="header-actions">
-          <button class="btn btn-primary" onclick="openPrinterModal()">+ เพิ่มเครื่องพิมพ์</button>
+          <button class="btn btn-primary" style="display:none" id="btn-add-printer" onclick="openPrinterModal()">+ เพิ่มเครื่องพิมพ์</button>
         </div>
       </div>
 

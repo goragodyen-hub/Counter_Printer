@@ -29,13 +29,40 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function fetchAll() {
-  [printers, records] = await Promise.all([
-    api('/api/printers'),
-    api('/api/records'),
+  const [printersData, recordsData] = await Promise.all([
+    fetch('/data/printers.json').then(r => r.json()),
+    fetch('/data/records.json').then(r => r.json()),
   ]);
-  const statsData = await api('/api/stats/monthly');
-  allMonths = statsData.months;
-  stats = statsData.stats;
+  printers = printersData.printers;
+  records = recordsData.records;
+  computeStats();
+}
+
+function computeStats() {
+  const months = [...new Set(records.map(r => r.month))].sort();
+  allMonths = months;
+  stats = {};
+  for (const month of months) {
+    stats[month] = {};
+    for (const printer of printers) {
+      const rec = records.find(r => r.printerId === printer.id && r.month === month);
+      if (!rec) continue;
+      const monthIdx = months.indexOf(month);
+      let usedBW = null;
+      let usedColor = null;
+      if (monthIdx > 0) {
+        const prevMonth = months[monthIdx - 1];
+        const prevRec = records.find(r => r.printerId === printer.id && r.month === prevMonth);
+        if (prevRec) {
+          usedBW = rec.counterBW - prevRec.counterBW;
+          usedColor = rec.counterColor - prevRec.counterColor;
+        }
+      }
+      const counterBW = rec.counterBW !== undefined ? rec.counterBW : (rec.counter || 0);
+      const counterColor = rec.counterColor !== undefined ? rec.counterColor : 0;
+      stats[month][printer.id] = { counterBW, counterColor, usedBW, usedColor, recordedAt: rec.recordedAt };
+    }
+  }
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
@@ -360,7 +387,7 @@ async function loadRecordForm() {
   html += `</tbody></table>`;
 
   document.getElementById('record-form-area').innerHTML = html;
-  document.getElementById('record-actions').style.display = 'flex';
+  document.getElementById('record-actions').style.display = 'block';
 }
 
 function updateDiff(printerId) {
@@ -384,57 +411,7 @@ function updateDiff(printerId) {
 }
 
 async function saveAllRecords() {
-  const month = document.getElementById('record-month').value;
-  if (!month) return showToast('กรุณาเลือกเดือน', 'error');
-
-  // Group inputs by printerId
-  const printerIds = [...new Set([...document.querySelectorAll('.counter-input')].map(inp => inp.dataset.printerId))];
-  const entries = [];
-  for (const printerId of printerIds) {
-    const bwInput = document.getElementById(`ci-bw-${printerId}`);
-    const colorInput = document.getElementById(`ci-color-${printerId}`);
-    const bwVal = bwInput?.value;
-    const colorVal = colorInput?.value;
-
-    // Skip if both empty
-    if ((!bwVal || bwVal === '0') && (!colorVal || colorVal === '0')) continue;
-
-    const printer = printers.find(p => p.id === printerId);
-    entries.push({
-      printerId,
-      location: printer?.location || '',
-      serial: printer?.serial || '',
-      zone: printer?.zone || '',
-      type: printer?.type || '',
-      counterBW: bwVal && bwVal !== '' ? Number(bwVal) : 0,
-      counterColor: colorVal && colorVal !== '' ? Number(colorVal) : 0,
-      note: document.getElementById(`note-${printerId}`)?.value || ''
-    });
-  }
-
-  if (!entries.length) return showToast('ไม่มีข้อมูลที่จะบันทึก', 'error');
-
-  // Save to local server
-  const result = await api('/api/records/batch', 'POST', { month, entries });
-  if (!result || !result.length) return showToast('เกิดข้อผิดพลาด', 'error');
-
-  // Send to Google Sheets
-  if (gsheetsUrl) {
-    try {
-      const gsPayload = { action: 'batchAppend', month, entries };
-      await fetch(gsheetsUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(gsPayload)
-      });
-    } catch (err) {
-      console.warn('Google Sheets sync failed:', err);
-    }
-  }
-
-  showToast(`✅ บันทึก ${result.length} เครื่อง สำเร็จ!`, 'success');
-  await fetchAll();
+  return showToast('🔒 ฟีเจอร์บันทึกใช้งานได้เฉพาะตอนรันบน localhost', 'error');
 }
 
 // ─── History Page ─────────────────────────────────────────────────────────────
@@ -566,7 +543,7 @@ async function loadSettings() {
         <th>IP Address</th>
         <th>Serial / MAC</th>
         <th>หมายเหตุ</th>
-        <th>จัดการ</th>
+        <th>สถานะ</th>
       </tr></thead>
       <tbody>
         ${printers.map(p => `
@@ -577,12 +554,7 @@ async function loadSettings() {
             <td class="ip-mono">${p.ip || ''}</td>
             <td class="serial-mono">${p.serial || ''}</td>
             <td style="font-size:0.78rem;color:var(--orange)">${p.note || ''}</td>
-            <td>
-              <div class="action-btns">
-                <button class="btn-icon" onclick="editPrinter('${p.id}')">✏️ แก้ไข</button>
-                <button class="btn-icon del" onclick="deletePrinter('${p.id}')">🗑️ ลบ</button>
-              </div>
-            </td>
+            <td style="color:var(--text-muted);font-size:0.75rem">🔒 ดูอย่างเดียว</td>
           </tr>
         `).join('')}
       </tbody>
@@ -730,35 +702,12 @@ function closePrinterDetail(e) {
 }
 
 async function savePrinter() {
-  const id = document.getElementById('modal-printer-id').value;
-  const body = {
-    zone:     document.getElementById('modal-zone').value,
-    type:     document.getElementById('modal-type').value,
-    location: document.getElementById('modal-location').value.trim(),
-    ip:       document.getElementById('modal-ip').value.trim(),
-    serial:   document.getElementById('modal-serial').value.trim(),
-    note:     document.getElementById('modal-note').value.trim(),
-  };
-  if (!body.location) return showToast('กรุณาระบุชื่อห้อง/สถานที่', 'error');
-
-  if (id) {
-    await api(`/api/printers/${id}`, 'PUT', body);
-    showToast('✅ แก้ไขข้อมูลสำเร็จ', 'success');
-  } else {
-    await api('/api/printers', 'POST', body);
-    showToast('✅ เพิ่มเครื่องพิมพ์สำเร็จ', 'success');
-  }
-
+  showToast('🔒 ฟีเจอร์แก้ไขใช้งานได้เฉพาะตอนรันบน localhost', 'error');
   closePrinterModal();
-  await loadSettings();
 }
 
 async function deletePrinter(id) {
-  const p = printers.find(x => x.id === id);
-  if (!confirm(`ต้องการลบ "${p?.location}" ใช่หรือไม่?\n(ข้อมูล Counter ที่บันทึกไปแล้วจะยังคงอยู่)`)) return;
-  await api(`/api/printers/${id}`, 'DELETE');
-  showToast('🗑️ ลบเครื่องพิมพ์แล้ว', 'success');
-  await loadSettings();
+  showToast('🔒 ฟีเจอร์ลบใช้งานได้เฉพาะตอนรันบน localhost', 'error');
 }
 
 // ─── Month Select Setup ───────────────────────────────────────────────────────
