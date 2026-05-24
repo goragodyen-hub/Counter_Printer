@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm start *)",
+      "PowerShell(node \"D:\\\\My project\\\\Counter Printer\\\\server.js\")",
+      "PowerShell(node \"D:\\\\My project\\\\Counter Printer\\\\migrate.js\")",
+      "PowerShell(Invoke-RestMethod http://localhost:3500/api/printers -Method GET | ConvertTo-Json -Depth 3)",
+      "PowerShell(Invoke-RestMethod http://localhost:3500/api/stats/monthly -Method GET | ConvertTo-Json -Depth 5)",
+      "PowerShell(Invoke-RestMethod http://localhost:3500/api/stats/monthly -Method GET | ConvertTo-Json -Depth 4)",
+      "WebFetch(domain:docs.google.com)",
+      "PowerShell(Invoke-RestMethod \"https://script.google.com/macros/s/AKfycbzOcGOSTqfKxYs1P9kgjB7IlOHTMAHyhPcrFy1qesT5KKDIbSRYCRA22BBJ6xO7h5mcMg/exec\" -Method GET)",
+      "PowerShell(try { Invoke-WebRequest -Uri \"https://script.google.com/macros/s/AKfycbzOcGOSTqfKxYs1P9kgjB7IlOHTMAHyhPcrFy1qesT5KKDIbSRYCRA22BBJ6xO7h5mcMg/exec\" -Method GET -TimeoutSec 10 } catch { $_.Exception.Message })",
+      "PowerShell(node \"D:\\\\My project\\\\Counter Printer\\\\import-jan.js\")",
+      "PowerShell(Invoke-RestMethod http://localhost:3500/api/stats/monthly -Method GET | ConvertTo-Json -Depth 3)"
+    ]
+  }
+}

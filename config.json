@@ -1,0 +1,5 @@
+{
+  "sheetsWebAppUrl": "",
+  "syncEnabled": false,
+  "syncComment": "วิธีเปิดใช้งาน: ใส่ URL จาก Google Apps Script Web App แล้วเปลี่ยน syncEnabled เป็น true"
+}

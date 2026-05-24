@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Counter Printer Tracker | บันทึกมิเตอร์เครื่องพิมพ์</title>
+  <meta name="description" content="ระบบบันทึกและติดตามมิเตอร์เครื่องพิมพ์รายเดือน สำหรับโรงเรียน" />
+
+  <!-- PWA -->
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Printer Counter" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">🖨️</span>
+        <div>
+          <div class="logo-title">Counter Printer</div>
+          <div class="logo-sub">Tracker</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" id="nav-record" onclick="showPage('record')">
+        <span class="nav-icon">📝</span>
+        <span>บันทึกมิเตอร์</span>
+      </a>
+      <a href="#" class="nav-item" id="nav-history" onclick="showPage('history')">
+        <span class="nav-icon">📋</span>
+        <span>ประวัติ</span>
+      </a>
+      <a href="#" class="nav-item" id="nav-settings" onclick="showPage('settings')">
+        <span class="nav-icon">⚙️</span>
+        <span>ตั้งค่าเครื่องพิมพ์</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="current-date" id="current-date"></div>
+    </div>
+  </aside>
+
+  <!-- Mobile Header -->
+  <header class="mobile-header">
+    <button class="menu-btn" id="menu-btn" onclick="toggleSidebar()">☰</button>
+    <span class="mobile-title">🖨️ Counter Printer</span>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main" id="main">
+
+    <!-- ─── DASHBOARD ─── -->
+    <section class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-sub">ภาพรวมมิเตอร์เครื่องพิมพ์ทั้งหมด</p>
+        </div>
+        <div class="header-actions">
+          <select id="dash-month-select" class="select-input" onchange="loadDashboard()"></select>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="summary-cards" id="summary-cards"></div>
+
+      <!-- Zone Tabs -->
+      <div class="zone-tabs" id="zone-tabs"></div>
+
+      <!-- Printer Grid -->
+      <div class="printer-grid" id="printer-grid"></div>
+
+      <!-- Chart Section -->
+      <div class="chart-section">
+        <div class="chart-card">
+          <h3 class="chart-title">📈 ยอดการพิมพ์รายเดือน (ทุกเครื่องรวมกัน)</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-monthly"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">🖨️ Counter สะสมแต่ละเครื่อง (เดือนล่าสุด)</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-compare"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── RECORD ─── -->
+    <section class="page" id="page-record">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">บันทึกมิเตอร์</h1>
+          <p class="page-sub">กรอกค่า Counter เครื่องพิมพ์ประจำเดือน</p>
+        </div>
+      </div>
+
+      <div class="record-form-card">
+        <div class="record-month-row">
+          <label class="form-label">เดือนที่บันทึก</label>
+          <input type="month" id="record-month" class="month-input" />
+          <button class="btn btn-secondary" onclick="loadRecordForm()">โหลดข้อมูล</button>
+        </div>
+
+        <div class="record-table-wrap" id="record-form-area">
+          <div class="empty-state">
+            <div class="empty-icon">📅</div>
+            <p>เลือกเดือน แล้วกด "โหลดข้อมูล"</p>
+          </div>
+        </div>
+
+        <div class="record-actions" id="record-actions" style="display:none;">
+          <button class="btn btn-primary btn-large" onclick="saveAllRecords()">
+            💾 บันทึกข้อมูลทั้งหมด
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── HISTORY ─── -->
+    <section class="page" id="page-history">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">ประวัติการบันทึก</h1>
+          <p class="page-sub">ข้อมูลมิเตอร์ทุกเดือนที่ผ่านมา</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-outline" onclick="exportPDF()">📄 Export PDF</button>
+        </div>
+      </div>
+
+      <div class="history-filters">
+        <select id="hist-month" class="select-input" onchange="loadHistory()">
+          <option value="">— ทุกเดือน —</option>
+        </select>
+        <select id="hist-zone" class="select-input" onchange="loadHistory()">
+          <option value="">— ทุกแผนก —</option>
+        </select>
+      </div>
+
+      <div class="table-card" id="history-table-wrap">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <p>กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── SETTINGS ─── -->
+    <section class="page" id="page-settings">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">ตั้งค่าเครื่องพิมพ์</h1>
+          <p class="page-sub">จัดการข้อมูลเครื่องพิมพ์ทั้งหมด</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="openPrinterModal()">+ เพิ่มเครื่องพิมพ์</button>
+        </div>
+      </div>
+
+      <div class="table-card" id="settings-table-wrap">
+        <div class="empty-state"><p>กำลังโหลด...</p></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── MODAL: Printer Form ─── -->
+  <div class="modal-overlay" id="printer-modal" onclick="closePrinterModal(event)">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-title">เพิ่มเครื่องพิมพ์</h2>
+        <button class="modal-close" onclick="closePrinterModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="modal-printer-id" />
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">แผนก / โซน *</label>
+            <select id="modal-zone" class="form-input">
+              <option value="มัธยม">มัธยม</option>
+              <option value="ประถม">ประถม</option>
+              <option value="อนุบาล">อนุบาล</option>
+              <option value="ห้องปฏิบัติการ">ห้องปฏิบัติการ</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ประเภท *</label>
+            <select id="modal-type" class="form-input">
+              <option value="ขาวดำ">ขาวดำ</option>
+              <option value="สี">สี</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ชื่อห้อง / สถานที่ตั้ง *</label>
+          <input type="text" id="modal-location" class="form-input" placeholder="เช่น วิชาการ (มัธยม) - เครื่องใหญ่" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">IP Address</label>
+            <input type="text" id="modal-ip" class="form-input" placeholder="172.17.x.x" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Serial No. / MAC</label>
+            <input type="text" id="modal-serial" class="form-input" placeholder="Serial หรือ MAC address" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">หมายเหตุ</label>
+          <input type="text" id="modal-note" class="form-input" placeholder="(ไม่บังคับ)" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePrinterModal()">ยกเลิก</button>
+        <button class="btn btn-primary" onclick="savePrinter()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── MODAL: Printer Detail ─── -->
+  <div class="modal-overlay" id="printer-detail-modal" onclick="closePrinterDetail(event)">
+    <div class="modal-card" style="max-width:700px">
+      <div class="modal-header">
+        <h2 id="detail-modal-title">📊 สรุปยอดเดือน</h2>
+        <button class="modal-close" onclick="closePrinterDetail()">✕</button>
+      </div>
+      <div class="modal-body" id="detail-printer-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

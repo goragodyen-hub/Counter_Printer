@@ -1,0 +1,274 @@
+{
+  "records": [
+    {
+      "id": "R-INIT-001",
+      "printerId": "P001",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 529401,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-002",
+      "printerId": "P002",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 163,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-003",
+      "printerId": "P003",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 176138,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-004",
+      "printerId": "P004",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 218593,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-005",
+      "printerId": "P005",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 47636,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-006",
+      "printerId": "P006",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 208485,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-007",
+      "printerId": "P007",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 60672,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-008",
+      "printerId": "P008",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 18948,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-009",
+      "printerId": "P009",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 95985,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-010",
+      "printerId": "P010",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 88869,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-011",
+      "printerId": "P011",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 31382,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-012",
+      "printerId": "P012",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 782,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-013",
+      "printerId": "P013",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 1985,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-014",
+      "printerId": "P014",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 1829,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-015",
+      "printerId": "P015",
+      "month": "2026-05",
+      "recordedAt": "2026-05-08T00:00:00",
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260508)",
+      "counterBW": 2733,
+      "counterColor": 0
+    },
+    {
+      "id": "R-INIT-JAN-P001",
+      "printerId": "P001",
+      "month": "2026-01",
+      "counterBW": 473588,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P002",
+      "printerId": "P002",
+      "month": "2026-01",
+      "counterBW": 155,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P003",
+      "printerId": "P003",
+      "month": "2026-01",
+      "counterBW": 144027,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P004",
+      "printerId": "P004",
+      "month": "2026-01",
+      "counterBW": 180225,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P005",
+      "printerId": "P005",
+      "month": "2026-01",
+      "counterBW": 39706,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P006",
+      "printerId": "P006",
+      "month": "2026-01",
+      "counterBW": 176860,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P007",
+      "printerId": "P007",
+      "month": "2026-01",
+      "counterBW": 54942,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P008",
+      "printerId": "P008",
+      "month": "2026-01",
+      "counterBW": 16602,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P009",
+      "printerId": "P009",
+      "month": "2026-01",
+      "counterBW": 82055,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P010",
+      "printerId": "P010",
+      "month": "2026-01",
+      "counterBW": 81615,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P011",
+      "printerId": "P011",
+      "month": "2026-01",
+      "counterBW": 24669,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P012",
+      "printerId": "P012",
+      "month": "2026-01",
+      "counterBW": 557,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P013",
+      "printerId": "P013",
+      "month": "2026-01",
+      "counterBW": 1675,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P014",
+      "printerId": "P014",
+      "month": "2026-01",
+      "counterBW": 1658,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    },
+    {
+      "id": "R-INIT-JAN-P015",
+      "printerId": "P015",
+      "month": "2026-01",
+      "counterBW": 2334,
+      "counterColor": 0,
+      "recordedAt": "2026-01-23T00:00:00",
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+    }
+  ]
+}
