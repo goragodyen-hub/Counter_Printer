@@ -30,8 +30,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 async function fetchAll() {
   const [printersData, recordsData] = await Promise.all([
-    fetch('/data/printers.json').then(r => r.json()),
-    fetch('/data/records.json').then(r => r.json()),
+    fetch('data/printers.json').then(r => r.json()),
+    fetch('data/records.json').then(r => r.json()),
   ]);
   printers = printersData.printers;
   records = recordsData.records;
