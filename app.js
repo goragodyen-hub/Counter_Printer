@@ -888,6 +888,36 @@ function openPrinterDetail(printerId) {
 
   const body = document.getElementById('detail-printer-body');
   document.getElementById('detail-modal-title').textContent = `🖨️ ${p.location}`;
+
+  // Form บันทึกมิเตอร์ด่วนภายใน Popup
+  const quickRecordHtml = `
+    <div class="quick-record-card" style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;">
+      <h4 style="margin:0 0 12px 0;font-size:0.92rem;display:flex;align-items:center;gap:6px;color:var(--text-primary)">📝 บันทึก/แก้ไขมิเตอร์ด่วน</h4>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1;min-width:120px;">
+          <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">เลือกเดือน</label>
+          <input type="month" id="modal-record-month" class="month-input" style="width:100%;margin:0;height:38px;padding:8px 10px;" onchange="onModalMonthChange('${p.id}')" />
+        </div>
+        <div style="flex:1.2;min-width:140px;">
+          <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">⬛ ขาวดำ (เดิม: <span id="modal-prev-bw-label">—</span>)</label>
+          <input type="number" id="modal-ci-bw" class="counter-input" style="width:100%;height:38px;" placeholder="กรอกมิเตอร์ใหม่" oninput="updateModalDiff('${p.id}')" />
+          <div id="modal-diff-bw" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
+        </div>
+        <div style="flex:1.2;min-width:140px; ${p.type === 'ขาวดำ' ? 'opacity:0.3;pointer-events:none;' : ''}">
+          <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">🎨 สี (เดิม: <span id="modal-prev-color-label">—</span>)</label>
+          <input type="number" id="modal-ci-color" class="counter-input" style="width:100%;height:38px;" placeholder="กรอกมิเตอร์ใหม่" ${p.type === 'ขาวดำ' ? 'disabled' : ''} oninput="updateModalDiff('${p.id}')" />
+          <div id="modal-diff-color" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <input type="text" id="modal-record-note" class="note-input" style="width:100%;height:38px;background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text-primary)" placeholder="หมายเหตุ (ไม่บังคับ)..." />
+        </div>
+        <button class="btn btn-primary" style="height:38px;padding:0 16px;white-space:nowrap;" onclick="saveSingleRecord('${p.id}')">💾 บันทึกมิเตอร์</button>
+      </div>
+    </div>
+  `;
+
   body.innerHTML = `
     <div style="margin-bottom:16px">
       <div style="font-size:1.1rem;font-weight:600;margin-bottom:4px">${p.location}</div>
@@ -898,7 +928,11 @@ function openPrinterDetail(printerId) {
       </div>
       ${p.note ? `<div style="margin-top:6px;font-size:0.8rem;color:var(--orange)">📝 ${p.note}</div>` : ''}
     </div>
-    <div style="max-height:300px;overflow-y:auto">
+    
+    ${quickRecordHtml}
+
+    <h3 style="font-size:0.92rem;margin:24px 0 12px 0;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--text-secondary)">📋 ประวัติการบันทึกย้อนหลัง</h3>
+    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
       <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
         <thead>
           <tr style="background:rgba(255,255,255,0.05)">
@@ -915,6 +949,158 @@ function openPrinterDetail(printerId) {
   `;
 
   document.getElementById('printer-detail-modal').classList.add('open');
+
+  // ตั้งค่าเดือนเริ่มต้นเป็นเดือนปัจจุบัน และอัปเดตฟิลด์คำนวณมิเตอร์เดิมทันที
+  const currentMonthStr = currentYearMonth();
+  document.getElementById('modal-record-month').value = currentMonthStr;
+  onModalMonthChange(p.id);
+}
+
+// ─── ฟังก์ชันสนับสนุนการบันทึกมิเตอร์ใน Modal ──────────────────────────────────────────
+
+function onModalMonthChange(printerId) {
+  const month = document.getElementById('modal-record-month').value;
+  if (!month) return;
+
+  const p = printers.find(x => x.id === printerId);
+  if (!p) return;
+
+  // ค้นหาประวัติก่อนหน้าเพื่อดึงยอดมิเตอร์เดิม
+  const sortedMonths = [...allMonths].sort();
+  const curMonthIdx = sortedMonths.indexOf(month);
+
+  let prevRec = null;
+  if (curMonthIdx > 0) {
+    const prevMonths = sortedMonths.slice(0, curMonthIdx).reverse();
+    for (const pm of prevMonths) {
+      prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+      if (prevRec) break;
+    }
+  } else if (curMonthIdx === -1) {
+    const prevMonths = [...sortedMonths].reverse();
+    for (const pm of prevMonths) {
+      if (pm < month) {
+        prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+        if (prevRec) break;
+      }
+    }
+  }
+
+  const prevBWVal = prevRec ? (prevRec.counterBW || 0) : 0;
+  const prevColorVal = prevRec ? (prevRec.counterColor || 0) : 0;
+
+  // อัปเดตการแสดงผลมิเตอร์เดิมบนป้าย label
+  document.getElementById('modal-prev-bw-label').textContent = fmtNum(prevBWVal);
+  if (document.getElementById('modal-prev-color-label')) {
+    document.getElementById('modal-prev-color-label').textContent = fmtNum(prevColorVal);
+  }
+
+  const inputBW = document.getElementById('modal-ci-bw');
+  const inputColor = document.getElementById('modal-ci-color');
+
+  inputBW.dataset.prev = prevBWVal;
+  if (inputColor) inputColor.dataset.prev = prevColorVal;
+
+  // ตรวจสอบว่าเดือนนี้เคยบันทึกไปแล้วหรือไม่ หากมีให้ดึงมาแสดงเพื่อทำการแก้ไขได้
+  const currentRecord = records.find(r => r.printerId === p.id && r.month === month);
+  if (currentRecord) {
+    inputBW.value = currentRecord.counterBW !== undefined ? currentRecord.counterBW : '';
+    if (inputColor && p.type === 'สี') {
+      inputColor.value = currentRecord.counterColor !== undefined ? currentRecord.counterColor : '';
+    }
+    document.getElementById('modal-record-note').value = currentRecord.note || '';
+  } else {
+    inputBW.value = '';
+    if (inputColor) inputColor.value = '';
+    document.getElementById('modal-record-note').value = '';
+  }
+
+  // อัปเดตผลต่างตัวเลขแผ่นที่พิมพ์ไป
+  updateModalDiff(printerId);
+}
+
+function updateModalDiff(printerId) {
+  const p = printers.find(x => x.id === printerId);
+  if (!p) return;
+
+  ['bw', 'color'].forEach(type => {
+    const input = document.getElementById(`modal-ci-${type}`);
+    if (!input || input.disabled) return;
+
+    const prev = input.dataset.prev !== '' ? Number(input.dataset.prev) : null;
+    const curr = input.value !== '' ? Number(input.value) : null;
+    const diffEl = document.getElementById(`modal-diff-${type}`);
+
+    if (curr === null || prev === null) {
+      diffEl.textContent = '—';
+      diffEl.className = 'diff-preview diff-zero';
+      return;
+    }
+
+    const diff = curr - prev;
+    if (diff > 0) {
+      diffEl.textContent = `▲ ${fmtNum(diff)} แผ่น`;
+      diffEl.className = 'diff-preview diff-positive';
+    } else if (diff < 0) {
+      diffEl.textContent = `⚠️ ${fmtNum(diff)}`;
+      diffEl.className = 'diff-preview diff-negative';
+    } else {
+      diffEl.textContent = '0 แผ่น';
+      diffEl.className = 'diff-preview diff-zero';
+    }
+  });
+}
+
+async function saveSingleRecord(printerId) {
+  const month = document.getElementById('modal-record-month').value;
+  if (!month) return showToast('กรุณาเลือกเดือน', 'error');
+
+  const bwInput = document.getElementById('modal-ci-bw');
+  const colorInput = document.getElementById('modal-ci-color');
+  const noteInput = document.getElementById('modal-record-note');
+
+  const counterBW = bwInput.value !== '' ? Number(bwInput.value) : null;
+  const counterColor = (colorInput && !colorInput.disabled && colorInput.value !== '') ? Number(colorInput.value) : 0;
+  const note = noteInput ? noteInput.value : '';
+
+  if (counterBW === null) {
+    return showToast('⚠️ กรุณากรอกข้อมูลมิเตอร์ขาวดำก่อนกดบันทึก', 'warning');
+  }
+
+  const entries = [{
+    printerId: printerId,
+    counterBW: counterBW,
+    counterColor: counterColor,
+    note: note
+  }];
+
+  showLoading(true);
+  try {
+    const res = await fetch(gsheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'saveRecords',
+        month: month,
+        entries: entries
+      })
+    }).then(r => r.json());
+
+    if (res && res.success) {
+      showToast('💾 บันทึกข้อมูลมิเตอร์เรียบร้อย!', 'success');
+      await fetchAll();
+      // รีโหลด Dashboard ด้านหลังด้วย
+      loadDashboard();
+      // เปิด Popup แสดงค่าล่าสุด
+      openPrinterDetail(printerId);
+    } else {
+      throw new Error(res ? res.error : 'ไม่สามารถบันทึกข้อมูลได้');
+    }
+  } catch (err) {
+    console.error('Error saving single record:', err);
+    showToast('❌ บันทึกล้มเหลว: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
 }
 
 function showOverallDetail() {
