@@ -1,4 +1,4 @@
-const CACHE_NAME = 'printer-counter-v11';
+const CACHE_NAME = 'printer-counter-v12';
 const ASSETS = [
   './',
   './index.html',

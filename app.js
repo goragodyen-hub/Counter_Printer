@@ -633,11 +633,24 @@ async function loadHistory() {
       const val2 = tot2 !== null ? fmtNum(tot2) : '—';
       const val3 = tot3 !== null ? fmtNum(tot3) : '—';
 
-      // คำนวณยอดที่ใช้ไปล่าสุด (เดือน M1 เทียบกับ M2)
+      // คำนวณยอดที่ใช้ไปล่าสุด (เดือน M1 เทียบกับ M2, หรือใช้ค่าที่คำนวณชดเชยไว้หากเว้นว่างเดือนก่อนหน้า)
       let diffText = '—';
       let diffClass = 'diff-zero';
       if (tot1 !== null && tot2 !== null) {
         const diff = tot1 - tot2;
+        if (diff > 0) {
+          diffText = `+${fmtNum(diff)}`;
+          diffClass = 'diff-positive';
+        } else if (diff < 0) {
+          diffText = `⚠️ ${fmtNum(diff)}`;
+          diffClass = 'diff-negative';
+        } else {
+          diffText = '0';
+          diffClass = 'diff-zero';
+        }
+      } else if (st1 && (st1.usedBW !== null || st1.usedColor !== null)) {
+        // หากไม่มีข้อมูลเดือนก่อนหน้าโดยตรง แต่มีข้อมูลที่ระบบเคยคำนวณชดเชยย้อนหลังให้
+        const diff = (st1.usedBW || 0) + (st1.usedColor || 0);
         if (diff > 0) {
           diffText = `+${fmtNum(diff)}`;
           diffClass = 'diff-positive';
@@ -682,8 +695,8 @@ async function loadHistory() {
           <th>รุ่น / Serial No.</th>
           <th style="text-align:right">${thMonth(m3)}</th>
           <th style="text-align:right">${thMonth(m2)}</th>
-          <th style="text-align:right;background:rgba(255,255,255,0.03);">${thMonth(m1)} (สะสมล่าสุด)</th>
-          <th style="text-align:right;color:var(--cyan)">ใช้ไปล่าสุด (แผ่น)</th>
+          <th style="text-align:right;" class="latest-month-col">${thMonth(m1)} (สะสมล่าสุด)</th>
+          <th style="text-align:right;" class="diff-col-header">ใช้ไปล่าสุด (แผ่น)</th>
           <th style="text-align:center">วันที่บันทึก (ล่าสุด)</th>
         </tr></thead>
         <tbody>
@@ -697,7 +710,7 @@ async function loadHistory() {
               </td>
               <td class="counter-cell" style="text-align:right">${r.val3}</td>
               <td class="counter-cell" style="text-align:right">${r.val2}</td>
-              <td class="counter-cell" style="text-align:right;background:rgba(255,255,255,0.02);font-weight:700;">${r.val1}</td>
+              <td class="counter-cell latest-month-col" style="text-align:right;font-weight:700;">${r.val1}</td>
               <td class="counter-cell ${r.diffClass}" style="text-align:right;font-weight:600">${r.diffText}</td>
               <td style="color:var(--text-muted);font-size:0.8rem;text-align:center">${r.recordedAt}</td>
             </tr>
@@ -797,6 +810,9 @@ function exportCSV() {
     let diffText = '—';
     if (tot1 !== null && tot2 !== null) {
       const diff = tot1 - tot2;
+      diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+    } else if (st1 && (st1.usedBW !== null || st1.usedColor !== null)) {
+      const diff = (st1.usedBW || 0) + (st1.usedColor || 0);
       diffText = diff >= 0 ? `+${diff}` : `${diff}`;
     }
 

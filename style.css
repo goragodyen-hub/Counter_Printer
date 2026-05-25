@@ -762,3 +762,14 @@ input, select, textarea { font-family: var(--font); }
   font-size: 0.95rem;
 }
 
+/* ─── History Table Highlight Styles ────────────────────────────────────────── */
+.history-table th.latest-month-col {
+  background: rgba(255, 255, 255, 0.03);
+}
+.history-table td.latest-month-col {
+  background: rgba(255, 255, 255, 0.02);
+}
+.history-table th.diff-col-header {
+  color: var(--cyan);
+}
+
