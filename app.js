@@ -889,7 +889,7 @@ function openPrinterDetail(printerId) {
   const body = document.getElementById('detail-printer-body');
   document.getElementById('detail-modal-title').textContent = `🖨️ ${p.location}`;
 
-  // Form บันทึกมิเตอร์ด่วนภายใน Popup
+  // Form บันทึกมิเตอร์ด่วนภายใน Popup พร้อมปุ่มปรับค่าแบบรวดเร็ว (-100, +100)
   const quickRecordHtml = `
     <div class="quick-record-card" style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;">
       <h4 style="margin:0 0 12px 0;font-size:0.92rem;display:flex;align-items:center;gap:6px;color:var(--text-primary)">📝 บันทึก/แก้ไขมิเตอร์ด่วน</h4>
@@ -898,14 +898,22 @@ function openPrinterDetail(printerId) {
           <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">เลือกเดือน</label>
           <input type="month" id="modal-record-month" class="month-input" style="width:100%;margin:0;height:38px;padding:8px 10px;" onchange="onModalMonthChange('${p.id}')" />
         </div>
-        <div style="flex:1.2;min-width:140px;">
+        <div style="flex:1.2;min-width:170px;">
           <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">⬛ ขาวดำ (เดิม: <span id="modal-prev-bw-label">—</span>)</label>
-          <input type="number" id="modal-ci-bw" class="counter-input" style="width:100%;height:38px;" placeholder="กรอกมิเตอร์ใหม่" oninput="updateModalDiff('${p.id}')" />
+          <div style="display:flex;align-items:center;gap:4px;">
+            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" onclick="adjustModalValue('bw', -100, '${p.id}')">-100</button>
+            <input type="number" id="modal-ci-bw" class="counter-input" style="flex:1;height:38px;width:100%;text-align:center;padding:6px 4px;" placeholder="กรอกมิเตอร์" oninput="updateModalDiff('${p.id}')" />
+            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" onclick="adjustModalValue('bw', 100, '${p.id}')">+100</button>
+          </div>
           <div id="modal-diff-bw" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
         </div>
-        <div style="flex:1.2;min-width:140px; ${p.type === 'ขาวดำ' ? 'opacity:0.3;pointer-events:none;' : ''}">
+        <div style="flex:1.2;min-width:170px; ${p.type === 'ขาวดำ' ? 'opacity:0.3;pointer-events:none;' : ''}">
           <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">🎨 สี (เดิม: <span id="modal-prev-color-label">—</span>)</label>
-          <input type="number" id="modal-ci-color" class="counter-input" style="width:100%;height:38px;" placeholder="กรอกมิเตอร์ใหม่" ${p.type === 'ขาวดำ' ? 'disabled' : ''} oninput="updateModalDiff('${p.id}')" />
+          <div style="display:flex;align-items:center;gap:4px;">
+            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" ${p.type === 'ขาวดำ' ? 'disabled' : ''} onclick="adjustModalValue('color', -100, '${p.id}')">-100</button>
+            <input type="number" id="modal-ci-color" class="counter-input" style="flex:1;height:38px;width:100%;text-align:center;padding:6px 4px;" placeholder="กรอกมิเตอร์" ${p.type === 'ขาวดำ' ? 'disabled' : ''} oninput="updateModalDiff('${p.id}')" />
+            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" ${p.type === 'ขาวดำ' ? 'disabled' : ''} onclick="adjustModalValue('color', 100, '${p.id}')">+100</button>
+          </div>
           <div id="modal-diff-color" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
         </div>
       </div>
@@ -1049,6 +1057,19 @@ function updateModalDiff(printerId) {
       diffEl.className = 'diff-preview diff-zero';
     }
   });
+}
+
+function adjustModalValue(type, amount, printerId) {
+  const input = document.getElementById(`modal-ci-${type}`);
+  if (!input || input.disabled) return;
+
+  const prev = input.dataset.prev !== '' ? Number(input.dataset.prev) : 0;
+  let curr = input.value !== '' ? Number(input.value) : prev;
+
+  curr = Math.max(0, curr + amount);
+  input.value = curr;
+
+  updateModalDiff(printerId);
 }
 
 async function saveSingleRecord(printerId) {
