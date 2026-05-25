@@ -578,71 +578,91 @@ async function loadHistory() {
     const curHistMonth = histMonth.value;
     const curHistZone  = histZone.value;
 
-    histMonth.innerHTML = `<option value="">— ทุกเดือน —</option>` +
+    histMonth.innerHTML = `<option value="">— เลือกเดือนล่าสุด —</option>` +
       [...allMonths].reverse().map(m => `<option value="${m}">${thMonth(m)}</option>`).join('');
-    histMonth.value = curHistMonth;
+    
+    if (curHistMonth) {
+      histMonth.value = curHistMonth;
+    } else {
+      histMonth.value = latestMonth();
+    }
 
     histZone.innerHTML = `<option value="">— ทุกแผนก —</option>` +
       ZONES.map(z => `<option value="${z}">${z}</option>`).join('');
     histZone.value = curHistZone;
 
-    const filterMonth = histMonth.value;
+    const filterMonth = histMonth.value || latestMonth();
     const filterZone  = histZone.value;
 
-    let rows = [];
-    const months = filterMonth ? [filterMonth] : [...allMonths].reverse();
+    // คำนวณ 3 เดือนย้อนหลัง
+    const [m3, m2, m1] = get3MonthsList(filterMonth);
 
-    for (const m of months) {
-      const mStats = stats[m] || {};
-      for (const p of printers) {
-        if (filterZone && p.zone !== filterZone) continue;
-        const st = mStats[p.id];
-        if (!st) continue;
-        rows.push({
-          month: m,
-          printer: p,
-          counterBW: st.counterBW,
-          counterColor: st.counterColor,
-          usedBW: st.usedBW,
-          usedColor: st.usedColor,
-          recordedAt: st.recordedAt
-        });
-      }
+    let rows = [];
+    for (const p of printers) {
+      if (filterZone && p.zone !== filterZone) continue;
+
+      const st1 = (stats[m1] || {})[p.id];
+      const st2 = (stats[m2] || {})[p.id];
+      const st3 = (stats[m3] || {})[p.id];
+
+      // แสดงเฉพาะเครื่องที่มีประวัติบันทึกอย่างน้อย 1 ครั้งใน 3 เดือนนี้
+      if (!st1 && !st2 && !st3) continue;
+
+      const formatVal = (st) => {
+        if (!st) return '—';
+        if (p.type === 'ขาวดำ') {
+          return fmtNum(st.counterBW);
+        } else {
+          return `${fmtNum(st.counterBW)} <span style="font-size:0.75rem;color:var(--text-muted)">/</span> <span style="color:#f59e0b">${fmtNum(st.counterColor)}</span>`;
+        }
+      };
+
+      const val1 = formatVal(st1);
+      const val2 = formatVal(st2);
+      const val3 = formatVal(st3);
+
+      const recordedAt = st1 && st1.recordedAt 
+        ? new Date(st1.recordedAt).toLocaleDateString('th-TH') 
+        : (st2 && st2.recordedAt ? new Date(st2.recordedAt).toLocaleDateString('th-TH') : '—');
+
+      rows.push({
+        zone: p.zone,
+        location: p.location,
+        serial: p.serial || '—',
+        val3,
+        val2,
+        val1,
+        recordedAt
+      });
     }
 
     const wrap = document.getElementById('history-table-wrap');
     if (!rows.length) {
-      wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>ไม่พบข้อมูล</p></div>`;
+      wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>ไม่พบข้อมูลบันทึกย้อนหลังในช่วง 3 เดือนนี้</p></div>`;
       return;
     }
 
     wrap.innerHTML = `
       <table class="history-table" id="export-table">
         <thead><tr>
-          <th>เดือน</th>
           <th>แผนก</th>
           <th>ห้อง / สถานที่</th>
-          <th>IP</th>
-          <th>Serial</th>
-          <th>⬛ B&W (แผ่น)</th>
-          <th>ใช้ไป B&W</th>
-          <th>🎨 สี (แผ่น)</th>
-          <th>ใช้ไป สี</th>
-          <th>วันที่บันทึก</th>
+          <th>Serial No.</th>
+          <th style="text-align:right">${thMonth(m3)}</th>
+          <th style="text-align:right">${thMonth(m2)}</th>
+          <th style="text-align:right;background:rgba(255,255,255,0.03);">${thMonth(m1)} (ล่าสุด)</th>
+          <th style="text-align:center">วันที่บันทึก (ล่าสุด)</th>
         </tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
-              <td class="month-cell">${thMonth(r.month)}</td>
-              <td><span style="color:${ZONE_COLORS[r.printer.zone] || '#94a3b8'}">${r.printer.zone}</span></td>
-              <td>${r.printer.location}</td>
-              <td class="ip-mono">${r.printer.ip || ''}</td>
-              <td class="serial-mono">${r.printer.serial || ''}</td>
-              <td class="counter-cell">${fmtNum(r.counterBW)}</td>
-              <td class="used-cell">${r.usedBW != null ? (r.usedBW >= 0 ? '+' + fmtNum(r.usedBW) : fmtNum(r.usedBW)) : '—'}</td>
-              <td class="counter-cell" style="color:#f59e0b">${fmtNum(r.counterColor)}</td>
-              <td class="used-cell" style="color:#f59e0b">${r.usedColor != null ? (r.usedColor >= 0 ? '+' + fmtNum(r.usedColor) : fmtNum(r.usedColor)) : '—'}</td>
-              <td style="color:var(--text-muted);font-size:0.8rem">${r.recordedAt ? new Date(r.recordedAt).toLocaleDateString('th-TH') : '—'}</td>
+              <td><span style="color:${ZONE_COLORS[r.zone] || '#94a3b8'}">${r.zone}</span></td>
+              <td style="font-weight:600">${r.location}</td>
+              <td class="serial-mono">${r.serial}</td>
+              <td class="counter-cell" style="text-align:right">${r.val3}</td>
+              <td class="counter-cell" style="text-align:right">${r.val2}</td>
+              <td class="counter-cell" style="text-align:right;background:rgba(255,255,255,0.02);font-weight:700;">${r.val1}</td>
+              <td style="color:var(--text-muted);font-size:0.8rem;text-align:center">${r.recordedAt}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -656,10 +676,28 @@ async function loadHistory() {
   }
 }
 
+// คำนวณ 3 เดือนย้อนหลังจากเดือนเป้าหมาย
+function get3MonthsList(targetMonthStr) {
+  if (!targetMonthStr) return ['', '', ''];
+  const [year, month] = targetMonthStr.split('-').map(Number);
+  const date = new Date(year, month - 1, 1);
+  
+  const m1 = targetMonthStr; 
+  
+  date.setMonth(date.getMonth() - 1);
+  const m2 = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  
+  date.setMonth(date.getMonth() - 1);
+  const m3 = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  
+  return [m3, m2, m1]; 
+}
+
 // Export PDF
 function exportPDF() {
-  const filterMonth = document.getElementById('hist-month').value;
-  const title = filterMonth ? `สรุปมิเตอร์เครื่องพิมพ์ ${thMonth(filterMonth)}` : 'ประวัติมิเตอร์เครื่องพิมพ์';
+  const filterMonth = document.getElementById('hist-month').value || latestMonth();
+  const [m3, m2, m1] = get3MonthsList(filterMonth);
+  const title = `รายงานสรุปมิเตอร์เครื่องพิมพ์ย้อนหลัง 3 เดือน (${thMonth(m1)})`;
 
   const tableEl = document.getElementById('export-table');
   if (!tableEl) return showToast('ไม่มีข้อมูลสำหรับ Export', 'error');
@@ -678,6 +716,8 @@ function exportPDF() {
       th { background: #1e1b4b; color: #fff; padding: 8px 10px; text-align: left; }
       td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
       tr:nth-child(even) td { background: #f9fafb; }
+      .serial-mono { font-family: monospace; }
+      .counter-cell { font-variant-numeric: tabular-nums; }
     </style>
     </head><body>
     <h1>🖨️ ${title}</h1>
@@ -691,56 +731,67 @@ function exportPDF() {
 
 // Export CSV (Excel)
 function exportCSV() {
-  const filterMonth = document.getElementById('hist-month').value;
+  const filterMonth = document.getElementById('hist-month').value || latestMonth();
   const filterZone  = document.getElementById('hist-zone').value;
 
-  let rows = [];
-  const months = filterMonth ? [filterMonth] : [...allMonths].reverse();
+  const [m3, m2, m1] = get3MonthsList(filterMonth);
 
-  for (const m of months) {
-    const mStats = stats[m] || {};
-    for (const p of printers) {
-      if (filterZone && p.zone !== filterZone) continue;
-      const st = mStats[p.id];
-      if (!st) continue;
-      rows.push({
-        month: m,
-        zone: p.zone,
-        location: p.location,
-        ip: p.ip || '',
-        serial: p.serial || '',
-        counterBW: st.counterBW || 0,
-        usedBW: st.usedBW != null ? st.usedBW : '',
-        counterColor: st.counterColor || 0,
-        usedColor: st.usedColor != null ? st.usedColor : '',
-        recordedAt: st.recordedAt ? new Date(st.recordedAt).toLocaleDateString('th-TH') : ''
-      });
-    }
+  let rows = [];
+  for (const p of printers) {
+    if (filterZone && p.zone !== filterZone) continue;
+
+    const st1 = (stats[m1] || {})[p.id];
+    const st2 = (stats[m2] || {})[p.id];
+    const st3 = (stats[m3] || {})[p.id];
+
+    if (!st1 && !st2 && !st3) continue;
+
+    const formatExcelVal = (st) => {
+      if (!st) return '—';
+      if (p.type === 'ขาวดำ') {
+        return st.counterBW;
+      } else {
+        return `B:${st.counterBW} / C:${st.counterColor}`;
+      }
+    };
+
+    const val1 = formatExcelVal(st1);
+    const val2 = formatExcelVal(st2);
+    const val3 = formatExcelVal(st3);
+
+    const recordedAt = st1 && st1.recordedAt 
+      ? new Date(st1.recordedAt).toLocaleDateString('th-TH') 
+      : (st2 && st2.recordedAt ? new Date(st2.recordedAt).toLocaleDateString('th-TH') : '—');
+
+    rows.push({
+      zone: p.zone,
+      location: p.location,
+      serial: p.serial || '—',
+      val3,
+      val2,
+      val1,
+      recordedAt
+    });
   }
 
   if (!rows.length) return showToast('ไม่มีข้อมูลสำหรับ Export', 'error');
 
   // สร้างไฟล์ CSV
-  const headers = ['เดือน', 'แผนก', 'ห้อง / สถานที่', 'IP Address', 'Serial No.', 'มิเตอร์ขาวดำ', 'ยอดใช้ขาวดำ (แผ่น)', 'มิเตอร์สี', 'ยอดใช้สี (แผ่น)', 'วันที่บันทึก'];
+  const headers = ['แผนก', 'ห้อง / สถานที่', 'Serial No.', thMonth(m3), thMonth(m2), `${thMonth(m1)} (ล่าสุด)`, 'วันที่บันทึก (ล่าสุด)'];
   
-  // แปลงข้อมูลแต่ละแถวให้อยู่ในรูปแบบ CSV และหลีกเลี่ยงเครื่องหมาย comma ในข้อความ
   const csvRows = [
     headers.join(','),
     ...rows.map(r => [
-      `"${thMonth(r.month)}"`,
       `"${r.zone}"`,
       `"${r.location.replace(/"/g, '""')}"`,
-      `"${r.ip}"`,
       `"${r.serial}"`,
-      r.counterBW,
-      r.usedBW,
-      r.counterColor,
-      r.usedColor,
+      `"${r.val3}"`,
+      `"${r.val2}"`,
+      `"${r.val1}"`,
       `"${r.recordedAt}"`
     ].join(','))
   ];
 
-  // เพิ่ม UTF-8 BOM (\uFEFF) เพื่อป้องกันไม่ให้ภาษาไทยแสดงผลเป็นตัวอักษรต่างด้าวเมื่อเปิดใน Excel
   const csvContent = "\uFEFF" + csvRows.join("\n");
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
