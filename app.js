@@ -641,6 +641,7 @@ async function loadHistory() {
       rows.push({
         zone: p.zone,
         location: p.location,
+        model: getPrinterModel(p.serial, p.location),
         serial: p.serial || '—',
         val3,
         val2,
@@ -662,7 +663,7 @@ async function loadHistory() {
         <thead><tr>
           <th>แผนก</th>
           <th>ห้อง / สถานที่</th>
-          <th>Serial No.</th>
+          <th>รุ่น / Serial No.</th>
           <th style="text-align:right">${thMonth(m3)}</th>
           <th style="text-align:right">${thMonth(m2)}</th>
           <th style="text-align:right;background:rgba(255,255,255,0.03);">${thMonth(m1)} (สะสมล่าสุด)</th>
@@ -674,7 +675,10 @@ async function loadHistory() {
             <tr>
               <td><span style="color:${ZONE_COLORS[r.zone] || '#94a3b8'}">${r.zone}</span></td>
               <td style="font-weight:600">${r.location}</td>
-              <td class="serial-mono">${r.serial}</td>
+              <td>
+                <div style="font-weight:600">${r.model}</div>
+                <div class="serial-mono" style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${r.serial}</div>
+              </td>
               <td class="counter-cell" style="text-align:right">${r.val3}</td>
               <td class="counter-cell" style="text-align:right">${r.val2}</td>
               <td class="counter-cell" style="text-align:right;background:rgba(255,255,255,0.02);font-weight:700;">${r.val1}</td>
@@ -787,6 +791,7 @@ function exportCSV() {
     rows.push({
       zone: p.zone,
       location: p.location,
+      model: getPrinterModel(p.serial, p.location),
       serial: p.serial || '—',
       val3,
       val2,
@@ -799,14 +804,14 @@ function exportCSV() {
   if (!rows.length) return showToast('ไม่มีข้อมูลสำหรับ Export', 'error');
 
   // สร้างไฟล์ CSV
-  const headers = ['แผนก', 'ห้อง / สถานที่', 'Serial No.', thMonth(m3), thMonth(m2), `${thMonth(m1)} (สะสมล่าสุด)`, 'ใช้ไปล่าสุด (แผ่น)', 'วันที่บันทึก (ล่าสุด)'];
+  const headers = ['แผนก', 'ห้อง / สถานที่', 'รุ่นเครื่องพิมพ์ (Serial No.)', thMonth(m3), thMonth(m2), `${thMonth(m1)} (สะสมล่าสุด)`, 'ใช้ไปล่าสุด (แผ่น)', 'วันที่บันทึก (ล่าสุด)'];
   
   const csvRows = [
     headers.join(','),
     ...rows.map(r => [
       `"${r.zone}"`,
       `"${r.location.replace(/"/g, '""')}"`,
-      `"${r.serial}"`,
+      `"${r.model} (${r.serial})"`,
       `"${r.val3}"`,
       `"${r.val2}"`,
       `"${r.val1}"`,
@@ -844,7 +849,7 @@ async function loadSettings() {
           <th>ห้อง / สถานที่</th>
           <th>ประเภท</th>
           <th>IP Address</th>
-          <th>Serial / MAC</th>
+          <th>รุ่น / Serial No.</th>
           <th>หมายเหตุ</th>
           <th>จัดการ</th>
         </tr></thead>
@@ -855,7 +860,10 @@ async function loadSettings() {
               <td>${p.location}</td>
               <td>${p.type === 'สี' ? '🎨 สี' : '⬛ ขาวดำ'}</td>
               <td class="ip-mono">${p.ip || ''}</td>
-              <td class="serial-mono">${p.serial || ''}</td>
+              <td>
+                <div style="font-weight:600">${getPrinterModel(p.serial, p.location)}</div>
+                <div class="serial-mono" style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${p.serial || '—'}</div>
+              </td>
               <td style="font-size:0.78rem;color:var(--orange)">${p.note || ''}</td>
               <td>
                 <div class="action-btns">
@@ -1371,4 +1379,47 @@ function showToast(msg, type = 'success') {
     t.className = `toast ${type} show`;
     setTimeout(() => t.classList.remove('show'), 3500);
   }
+}
+
+// ค้นหารุ่นเครื่องพิมพ์ตาม Serial No. หรือสถานที่ตั้ง (อ้างอิงจากตารางสรุปมกราคม-พฤษภาคม)
+function getPrinterModel(serial, location) {
+  if (!serial) return '—';
+  const s = String(serial).trim().toUpperCase();
+  const loc = String(location).trim();
+
+  // จับคู่ตาม Serial No.
+  if (s.includes('9173RB20165')) return 'IM C4510';
+  if (s.includes('4443RC20076')) return 'IM 4000';
+  if (s.includes('9154R130684')) return 'IM C3010';
+  if (s.includes('9173RB20195')) return 'IM C4500';
+  if (s.includes('4443RC20088')) return 'IM 4000';
+  if (s.includes('5323XA42068')) return 'P C600';
+  if (s.includes('4443RC20066')) return 'IM 4000';
+  if (s.includes('5323X941683')) return 'P C600';
+  if (s.includes('4443RC20060')) return 'IM 4000';
+  if (s.includes('5823P700770') || s.includes('58:38:79:65:68:FB')) return 'M C251FWB';
+  if (s.includes('5323X941720')) return 'P C600';
+  if (s.includes('5323XA42071') || s.includes('5323AA42071')) return 'P C600';
+  if (s.includes('5323XA42065')) return 'P C600';
+  if (s.includes('5323XA42070') || s.includes('5323AA42070')) return 'P C600';
+  if (s.includes('5823PA00137') || s.includes('58:38:79:65:B7:52')) return 'M C251FWB';
+
+  // ค้นหาตามชื่อห้อง (เผื่อมีการแก้ไข Serial หรือใช้ต่างออกไป)
+  if (loc.includes('วิชาการ (มัธยม) - เครื่องใหญ่')) return 'IM C4510';
+  if (loc.includes('อำนวยการ (มัธยม) - 2')) return 'IM 4000';
+  if (loc.includes('อำนวยการ (มัธยม) - 1')) return 'IM C3010';
+  if (loc.includes('ห้องประชุมกลาง (ประถม) - 1')) return 'IM C4500';
+  if (loc.includes('ธุรการ (ประถม)')) return 'IM 4000';
+  if (loc.includes('ทะเบียน (มัธยม)')) return 'P C600';
+  if (loc.includes('ศูนย์ครู (อนุบาล) - 1')) return 'IM 4000';
+  if (loc.includes('ศูนย์ครู (อนุบาล) - 2')) return 'P C600';
+  if (loc.includes('ห้องประชุมกลาง (ประถม) - 2')) return 'IM 4000';
+  if (loc.includes('ห้องประชุมกลาง (ประถม) - เครื่องสี')) return 'M C251FWB';
+  if (loc.includes('PC4')) return 'P C600';
+  if (loc.includes('PC2')) return 'P C600';
+  if (loc.includes('PC1')) return 'P C600';
+  if (loc.includes('PC3')) return 'P C600';
+  if (loc.includes('วิชาการ (มัธยม) - เครื่องสีเล็ก')) return 'M C251FWB';
+
+  return '—';
 }
