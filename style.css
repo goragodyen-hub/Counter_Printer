@@ -287,6 +287,7 @@ input, select, textarea { font-family: var(--font); }
   inset: 0;
   background: linear-gradient(135deg, transparent 60%, rgba(124,58,237,0.05));
   pointer-events: none;
+  z-index: 0;
 }
 
 .printer-card-header {
@@ -355,6 +356,8 @@ input, select, textarea { font-family: var(--font); }
   white-space: nowrap;
   transition: all 0.3s ease;
   pointer-events: none;
+  position: relative;
+  z-index: 2;
 }
 .ps-dot {
   width: 6px;
@@ -374,16 +377,16 @@ input, select, textarea { font-family: var(--font); }
 .ps-offline { background: rgba(239,68,68,0.15); color: #ef4444; }
 .ps-offline .ps-dot { background: #ef4444; }
 
-/* Checking: muted grey blinking */
-.ps-checking { background: rgba(100,116,139,0.12); color: #64748b; }
+/* Checking: animated spinner dot - more visible */
+.ps-checking { background: rgba(148,163,184,0.18); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
 .ps-checking .ps-dot {
-  background: #64748b;
+  background: #94a3b8;
   animation: ps-blink 1s step-start infinite;
 }
 
 /* Unknown: no IP or HTTPS block */
-.ps-unknown { background: rgba(100,116,139,0.08); color: #4b5563; }
-.ps-unknown .ps-dot { background: #4b5563; }
+.ps-unknown { background: rgba(100,116,139,0.15); color: #64748b; border: 1px solid rgba(100,116,139,0.2); }
+.ps-unknown .ps-dot { background: #64748b; }
 
 @keyframes ps-pulse-green {
   0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
@@ -391,7 +394,8 @@ input, select, textarea { font-family: var(--font); }
   100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
 }
 @keyframes ps-blink {
-  50% { opacity: 0.2; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 
 /* ─── Chart Section ──────────────────────────────────────────────────────────── */
