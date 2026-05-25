@@ -2,7 +2,7 @@
   "name": "Counter Printer Tracker",
   "short_name": "Printer Counter",
   "description": "ระบบบันทึกมิเตอร์เครื่องพิมพ์รายเดือน",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0f0e17",
   "theme_color": "#7c3aed",

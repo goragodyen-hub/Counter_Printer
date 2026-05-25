@@ -1,8 +1,8 @@
 /* =====================================================================
-   Counter Printer Tracker — app.js
+   Counter Printer Tracker — app.js (Static Site + Google Sheets Version)
    ===================================================================== */
 
-// ─── State ────────────────────────────────────────────────────────────────────
+// ─── State & Configurations ──────────────────────────────────────────────────
 let printers = [];
 let records  = [];
 let stats    = {};
@@ -10,7 +10,9 @@ let allMonths = [];
 let activeZone = 'ทั้งหมด';
 let chartMonthly = null;
 let chartCompare = null;
-let gsheetsUrl = 'https://script.google.com/macros/s/AKfycbzOcGOSTqfKxYs1P9kgjB7IlOHTMAHyhPcrFy1qesT5KKDIbSRYCRA22BBJ6xO7h5mcMg/exec';
+
+// ใส่ Google Apps Script Web App URL ที่นี่
+let gsheetsUrl = 'https://script.google.com/macros/s/AKfycbxVSZF5bn4T_mNy_lejv3Jh0r77lBDE0FsWdeE_jGNyw0qv4TIPvgnnpwBKE2dEU1uH/exec';
 
 const ZONES = ['มัธยม', 'ประถม', 'อนุบาล', 'ห้องปฏิบัติการ'];
 const ZONE_COLORS = {
@@ -28,39 +30,76 @@ window.addEventListener('DOMContentLoaded', async () => {
   showPage('dashboard');
 });
 
-async function fetchAll() {
-  const [printersData, recordsData] = await Promise.all([
-    fetch('data/printers.json').then(r => r.json()),
-    fetch('data/records.json').then(r => r.json()),
-  ]);
-  printers = printersData.printers;
-  records = recordsData.records;
-  computeStats();
+// ─── API Helper & Loading ─────────────────────────────────────────────────────
+function showLoading(show) {
+  const spinner = document.getElementById('loading-spinner');
+  if (spinner) {
+    if (show) spinner.classList.add('active');
+    else spinner.classList.remove('active');
+  }
 }
 
+async function fetchAll() {
+  showLoading(true);
+  try {
+    const res = await fetch(`${gsheetsUrl}?action=all`).then(r => r.json());
+    if (res && res.success) {
+      printers = res.printers || [];
+      records = res.records || [];
+      computeStats();
+    } else {
+      throw new Error(res ? res.error : 'ไม่สามารถโหลดข้อมูลได้');
+    }
+  } catch (err) {
+    console.error('Error fetching data:', err);
+    showToast('❌ ไม่สามารถเชื่อมต่อกับ Google Sheets ได้: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// คำนวณยอดใช้จริงแต่ละเดือน (แก้ bug คำนวณเดือนไม่ต่อเนื่อง)
 function computeStats() {
   const months = [...new Set(records.map(r => r.month))].sort();
   allMonths = months;
   stats = {};
+  
   for (const month of months) {
     stats[month] = {};
+    const monthIdx = months.indexOf(month);
+    
     for (const printer of printers) {
       const rec = records.find(r => r.printerId === printer.id && r.month === month);
       if (!rec) continue;
-      const monthIdx = months.indexOf(month);
+      
       let usedBW = null;
       let usedColor = null;
+      
+      // ค้นหาข้อมูลเดือนล่าสุดก่อนหน้า (รองรับการข้ามเดือนหรือข้อมูลไม่ต่อเนื่อง)
       if (monthIdx > 0) {
-        const prevMonth = months[monthIdx - 1];
-        const prevRec = records.find(r => r.printerId === printer.id && r.month === prevMonth);
+        const prevMonths = months.slice(0, monthIdx).reverse();
+        let prevRec = null;
+        for (const pm of prevMonths) {
+          prevRec = records.find(r => r.printerId === printer.id && r.month === pm);
+          if (prevRec) break;
+        }
+        
         if (prevRec) {
           usedBW = rec.counterBW - prevRec.counterBW;
           usedColor = rec.counterColor - prevRec.counterColor;
         }
       }
-      const counterBW = rec.counterBW !== undefined ? rec.counterBW : (rec.counter || 0);
+      
+      const counterBW = rec.counterBW !== undefined ? rec.counterBW : 0;
       const counterColor = rec.counterColor !== undefined ? rec.counterColor : 0;
-      stats[month][printer.id] = { counterBW, counterColor, usedBW, usedColor, recordedAt: rec.recordedAt };
+      
+      stats[month][printer.id] = {
+        counterBW,
+        counterColor,
+        usedBW,
+        usedColor,
+        recordedAt: rec.recordedAt
+      };
     }
   }
 }
@@ -88,8 +127,8 @@ function toggleSidebar() {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  await fetchAll();
-  const selMonth = document.getElementById('dash-month-select').value || latestMonth();
+  const selMonthEl = document.getElementById('dash-month-select');
+  const selMonth = selMonthEl.value || latestMonth();
   renderSummaryCards(selMonth);
   renderZoneTabs();
   renderPrinterGrid(selMonth);
@@ -104,8 +143,7 @@ function renderSummaryCards(month) {
   const monthStats = stats[month] || {};
   const totalPrinters = printers.length;
   const recorded = Object.keys(monthStats).length;
-  const totalCounterBW = Object.values(monthStats).reduce((s, v) => s + (v.counterBW || 0), 0);
-  const totalCounterColor = Object.values(monthStats).reduce((s, v) => s + (v.counterColor || 0), 0);
+  
   const totalUsedBW = Object.values(monthStats).reduce((s, v) => s + (v.usedBW || 0), 0);
   const totalUsedColor = Object.values(monthStats).reduce((s, v) => s + (v.usedColor || 0), 0);
 
@@ -168,6 +206,7 @@ function renderPrinterGrid(month) {
     const counterColor = st ? st.counterColor : null;
     const usedBW = st ? st.usedBW : null;
     const usedColor = st ? st.usedColor : null;
+    
     const typeBadge = p.type === 'สี'
       ? `<span class="printer-type-badge badge-color">🎨 สี</span>`
       : `<span class="printer-type-badge badge-bw">⬛ ขาวดำ</span>`;
@@ -213,13 +252,13 @@ function renderPrinterGrid(month) {
 }
 
 function renderCharts() {
-  // Monthly total usage bar chart - separate BW and Color
+  // กราฟสรุปยอดพิมพ์รวม 6 เดือนหลัง
   const months6 = allMonths.slice(-6);
   const totalBWByMonth = months6.map(m => {
-    return Object.values(stats[m] || {}).reduce((s, v) => s + (v.usedBW ?? v.counterBW ?? 0), 0);
+    return Object.values(stats[m] || {}).reduce((s, v) => s + (v.usedBW || 0), 0);
   });
   const totalColorByMonth = months6.map(m => {
-    return Object.values(stats[m] || {}).reduce((s, v) => s + (v.usedColor ?? v.counterColor ?? 0), 0);
+    return Object.values(stats[m] || {}).reduce((s, v) => s + (v.usedColor || 0), 0);
   });
 
   const ctx1 = document.getElementById('chart-monthly');
@@ -258,7 +297,7 @@ function renderCharts() {
     }
   });
 
-  // Compare per printer (latest month)
+  // กราฟเปรียบเทียบมิเตอร์สะสมแต่ละเครื่องในเดือนล่าสุด
   const latM = latestMonth();
   const latStats = stats[latM] || {};
   const pList = printers.filter(p => latStats[p.id] && ((latStats[p.id].counterBW || 0) > 0 || (latStats[p.id].counterColor || 0) > 0));
@@ -311,193 +350,313 @@ async function loadRecordForm() {
   const month = document.getElementById('record-month').value;
   if (!month) return showToast('กรุณาเลือกเดือน', 'error');
 
-  await fetchAll();
-  const monthStats = stats[month] || {};
+  showLoading(true);
+  try {
+    await fetchAll();
+    const monthStats = stats[month] || {};
 
-  // Build form grouped by zone
-  const zones = [...new Set(printers.map(p => p.zone))];
-  let html = `<table class="record-table">
-    <thead><tr>
-      <th>ห้อง / สถานที่</th>
-      <th>IP / Serial</th>
-      <th>⬛ ขาวดำ เดิม</th>
-      <th>⬛ ขาวดำ ใหม่</th>
-      <th>ใช้ไป (B&W)</th>
-      <th>🎨 สี เดิม</th>
-      <th>🎨 สี ใหม่</th>
-      <th>ใช้ไป (สี)</th>
-      <th>หมายเหตุ</th>
-    </tr></thead>
-    <tbody id="record-tbody">`;
+    const zones = [...new Set(printers.map(p => p.zone))];
+    let html = `<table class="record-table">
+      <thead><tr>
+        <th>ห้อง / สถานที่</th>
+        <th>IP / Serial</th>
+        <th>⬛ ขาวดำ เดิม</th>
+        <th>⬛ ขาวดำ ใหม่</th>
+        <th>ใช้ไป (B&W)</th>
+        <th>🎨 สี เดิม</th>
+        <th>🎨 สี ใหม่</th>
+        <th>ใช้ไป (สี)</th>
+        <th>หมายเหตุ</th>
+      </tr></thead>
+      <tbody id="record-tbody">`;
 
-  for (const zone of zones) {
-    const zPrinters = printers.filter(p => p.zone === zone);
-    html += `<tr class="zone-group-row"><td colspan="9">▪ ${zone}</td></tr>`;
-    for (const p of zPrinters) {
-      const st = monthStats[p.id];
-      const prevBWCounter = st && st.counterBW !== undefined ? st.counterBW : null;
-      const prevColorCounter = st && st.counterColor !== undefined ? st.counterColor : null;
-      const prevBWVal = prevBWCounter !== null ? prevBWCounter : '';
-      const prevColorVal = prevColorCounter !== null ? prevColorCounter : '';
-      html += `
-        <tr>
-          <td>
-            <div style="font-weight:500">${p.location}</div>
-            <div style="font-size:0.7rem;color:var(--text-muted)">${p.type === 'สี' ? '🎨 สี' : '⬛ ขาวดำ'}</div>
-          </td>
-          <td>
-            <div class="ip-mono">${p.ip || ''}</div>
-            <div class="serial-mono">${p.serial || ''}</div>
-          </td>
-          <td class="prev-counter">${prevBWCounter !== null ? fmtNum(prevBWCounter) : '—'}</td>
-          <td>
-            <input type="number" class="counter-input"
-              id="ci-bw-${p.id}"
-              data-printer-id="${p.id}"
-              data-counter-type="bw"
-              data-prev="${prevBWVal}"
-              value="${prevBWVal}"
-              min="0"
-              placeholder="กรอก Counter"
-              oninput="updateDiff('${p.id}')"
-            />
-          </td>
-          <td id="diff-bw-${p.id}" class="diff-preview diff-zero">—</td>
-          <td class="prev-counter" style="color:#f59e0b">${prevColorCounter !== null ? fmtNum(prevColorCounter) : '—'}</td>
-          <td>
-            <input type="number" class="counter-input"
-              id="ci-color-${p.id}"
-              data-printer-id="${p.id}"
-              data-counter-type="color"
-              data-prev="${prevColorVal}"
-              value="${prevColorVal}"
-              min="0"
-              placeholder="กรอก Counter"
-              oninput="updateDiff('${p.id}')"
-            />
-          </td>
-          <td id="diff-color-${p.id}" class="diff-preview diff-zero">—</td>
-          <td>
-            <input type="text" class="note-input" id="note-${p.id}" placeholder="หมายเหตุ..." />
-          </td>
-        </tr>`;
+    for (const zone of zones) {
+      const zPrinters = printers.filter(p => p.zone === zone);
+      html += `<tr class="zone-group-row"><td colspan="9">▪ ${zone}</td></tr>`;
+      for (const p of zPrinters) {
+        // ค้นหาข้อมูลมิเตอร์ล่าสุดของเดือนก่อนหน้า (เพื่อเอามาตั้งต้นเป็น มิเตอร์เดิม)
+        let prevBWVal = '';
+        let prevColorVal = '';
+
+        // ดึงจากประวัติตรงๆ
+        const sortedMonths = [...allMonths].sort();
+        const curMonthIdx = sortedMonths.indexOf(month);
+        
+        let prevRec = null;
+        if (curMonthIdx > 0) {
+          const prevMonths = sortedMonths.slice(0, curMonthIdx).reverse();
+          for (const pm of prevMonths) {
+            prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+            if (prevRec) break;
+          }
+        } else if (curMonthIdx === -1) {
+          // หากเป็นเดือนใหม่ที่ยังไม่เคยมีข้อมูลมาก่อน ให้ค้นจากเดือนทั้งหมดที่มี
+          const prevMonths = [...sortedMonths].reverse();
+          for (const pm of prevMonths) {
+            if (pm < month) {
+              prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+              if (prevRec) break;
+            }
+          }
+        }
+
+        if (prevRec) {
+          prevBWVal = prevRec.counterBW !== undefined ? prevRec.counterBW : 0;
+          prevColorVal = prevRec.counterColor !== undefined ? prevRec.counterColor : 0;
+        }
+
+        // ค่าในเดือนปัจจุบันที่บันทึกไปแล้ว (ถ้ามี)
+        const st = monthStats[p.id];
+        const currentBW = st && st.counterBW !== undefined ? st.counterBW : '';
+        const currentColor = st && st.counterColor !== undefined ? st.counterColor : '';
+        const note = (st && st.note) ? st.note : '';
+
+        html += `
+          <tr>
+            <td>
+              <div style="font-weight:500">${p.location}</div>
+              <div style="font-size:0.7rem;color:var(--text-muted)">${p.type === 'สี' ? '🎨 สี' : '⬛ ขาวดำ'}</div>
+            </td>
+            <td>
+              <div class="ip-mono">${p.ip || ''}</div>
+              <div class="serial-mono">${p.serial || ''}</div>
+            </td>
+            <td class="prev-counter">${prevBWVal !== '' ? fmtNum(prevBWVal) : '—'}</td>
+            <td>
+              <input type="number" class="counter-input"
+                id="ci-bw-${p.id}"
+                data-printer-id="${p.id}"
+                data-counter-type="bw"
+                data-prev="${prevBWVal}"
+                value="${currentBW}"
+                min="0"
+                placeholder="กรอก Counter"
+                oninput="updateDiff('${p.id}')"
+              />
+            </td>
+            <td id="diff-bw-${p.id}" class="diff-preview diff-zero">—</td>
+            <td class="prev-counter" style="color:#f59e0b">${prevColorVal !== '' ? fmtNum(prevColorVal) : '—'}</td>
+            <td>
+              <input type="number" class="counter-input"
+                id="ci-color-${p.id}"
+                data-printer-id="${p.id}"
+                data-counter-type="color"
+                data-prev="${prevColorVal}"
+                value="${currentColor}"
+                min="0"
+                placeholder="กรอก Counter"
+                oninput="updateDiff('${p.id}')"
+                ${p.type === 'ขาวดำ' ? 'disabled style="background:rgba(255,255,255,0.02);cursor:not-allowed;"' : ''}
+              />
+            </td>
+            <td id="diff-color-${p.id}" class="diff-preview diff-zero">—</td>
+            <td>
+              <input type="text" class="note-input" id="note-${p.id}" value="${note}" placeholder="หมายเหตุ..." />
+            </td>
+          </tr>`;
+      }
     }
+
+    html += `</tbody></table>`;
+
+    document.getElementById('record-form-area').innerHTML = html;
+    document.getElementById('record-actions').style.display = 'block';
+
+    // อัปเดต diff ทันทีหลังโหลดฟอร์ม
+    printers.forEach(p => updateDiff(p.id));
+
+  } catch (err) {
+    console.error('Error loading record form:', err);
+    showToast('❌ ไม่สามารถโหลดฟอร์มบันทึกได้', 'error');
+  } finally {
+    showLoading(false);
   }
-
-  html += `</tbody></table>`;
-
-  document.getElementById('record-form-area').innerHTML = html;
-  document.getElementById('record-actions').style.display = 'block';
 }
 
 function updateDiff(printerId) {
   ['bw', 'color'].forEach(type => {
     const input = document.getElementById(`ci-${type}-${printerId}`);
-    if (!input) return;
-    const prev  = Number(input.dataset.prev);
-    const curr  = Number(input.value);
+    if (!input || input.disabled) return;
+    const prev  = input.dataset.prev !== '' ? Number(input.dataset.prev) : null;
+    const curr  = input.value !== '' ? Number(input.value) : null;
     const diffEl= document.getElementById(`diff-${type}-${printerId}`);
 
-    if (!input.value) { diffEl.textContent = '—'; diffEl.className = 'diff-preview diff-zero'; return; }
+    if (curr === null) { 
+      diffEl.textContent = '—'; 
+      diffEl.className = 'diff-preview diff-zero'; 
+      return; 
+    }
+
+    if (prev === null) { 
+      diffEl.textContent = '—'; 
+      diffEl.className = 'diff-preview diff-zero'; 
+      return; 
+    }
 
     const diff = curr - prev;
-    if (!prev && prev !== 0) { diffEl.textContent = '—'; diffEl.className = 'diff-preview diff-zero'; return; }
-    if (diff > 0) { diffEl.textContent = `▲ ${fmtNum(diff)}`; diffEl.className = 'diff-preview diff-positive'; }
-    else if (diff < 0) { diffEl.textContent = `▼ ${fmtNum(Math.abs(diff))}`; diffEl.className = 'diff-preview diff-negative'; }
-    else { diffEl.textContent = '0'; diffEl.className = 'diff-preview diff-zero'; }
+    if (diff > 0) { 
+      diffEl.textContent = `▲ ${fmtNum(diff)}`; 
+      diffEl.className = 'diff-preview diff-positive'; 
+    } else if (diff < 0) { 
+      diffEl.textContent = `⚠️ ${fmtNum(diff)}`; 
+      diffEl.className = 'diff-preview diff-negative'; 
+    } else { 
+      diffEl.textContent = '0'; 
+      diffEl.className = 'diff-preview diff-zero'; 
+    }
 
-    input.classList.toggle('changed', input.value !== input.dataset.prev);
+    input.classList.toggle('changed', input.value !== (input.dataset.prev || ''));
   });
 }
 
+// เซฟข้อมูลมิเตอร์แบบกลุ่มไปยัง Google Sheets
 async function saveAllRecords() {
-  return showToast('🔒 ฟีเจอร์บันทึกใช้งานได้เฉพาะตอนรันบน localhost', 'error');
+  const month = document.getElementById('record-month').value;
+  if (!month) return showToast('กรุณาเลือกเดือน', 'error');
+
+  const entries = [];
+  printers.forEach(p => {
+    const bwInput = document.getElementById(`ci-bw-${p.id}`);
+    const colorInput = document.getElementById(`ci-color-${p.id}`);
+    const noteInput = document.getElementById(`note-${p.id}`);
+
+    if (bwInput && colorInput) {
+      const counterBW = bwInput.value !== '' ? Number(bwInput.value) : null;
+      const counterColor = colorInput.value !== '' ? Number(colorInput.value) : null;
+      const note = noteInput ? noteInput.value : '';
+
+      // เก็บประวัติถ้าระบุค่าใดค่าหนึ่ง
+      if (counterBW !== null || counterColor !== null) {
+        entries.push({
+          printerId: p.id,
+          counterBW: counterBW || 0,
+          counterColor: counterColor || 0,
+          note: note
+        });
+      }
+    }
+  });
+
+  if (entries.length === 0) {
+    return showToast('⚠️ กรุณากรอกข้อมูลมิเตอร์อย่างน้อย 1 เครื่องก่อนกดบันทึก', 'warning');
+  }
+
+  showLoading(true);
+  try {
+    const res = await fetch(gsheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'saveRecords',
+        month: month,
+        entries: entries
+      })
+    }).then(r => r.json());
+
+    if (res && res.success) {
+      showToast('💾 บันทึกข้อมูลมิเตอร์ลง Google Sheets เรียบร้อย!', 'success');
+      await fetchAll();
+      loadRecordForm(); // โหลดฟอร์มใหม่พร้อมค่าล่าสุด
+    } else {
+      throw new Error(res ? res.error : 'ไม่สามารถบันทึกข้อมูลได้');
+    }
+  } catch (err) {
+    console.error('Error saving records:', err);
+    showToast('❌ บันทึกล้มเหลว: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
 }
 
 // ─── History Page ─────────────────────────────────────────────────────────────
 async function loadHistory() {
-  await fetchAll();
+  showLoading(true);
+  try {
+    await fetchAll();
 
-  // Populate filters
-  const histMonth = document.getElementById('hist-month');
-  const histZone  = document.getElementById('hist-zone');
-  const curHistMonth = histMonth.value;
-  const curHistZone  = histZone.value;
+    const histMonth = document.getElementById('hist-month');
+    const histZone  = document.getElementById('hist-zone');
+    const curHistMonth = histMonth.value;
+    const curHistZone  = histZone.value;
 
-  histMonth.innerHTML = `<option value="">— ทุกเดือน —</option>` +
-    [...allMonths].reverse().map(m => `<option value="${m}">${thMonth(m)}</option>`).join('');
-  histMonth.value = curHistMonth;
+    histMonth.innerHTML = `<option value="">— ทุกเดือน —</option>` +
+      [...allMonths].reverse().map(m => `<option value="${m}">${thMonth(m)}</option>`).join('');
+    histMonth.value = curHistMonth;
 
-  histZone.innerHTML = `<option value="">— ทุกแผนก —</option>` +
-    ZONES.map(z => `<option value="${z}">${z}</option>`).join('');
-  histZone.value = curHistZone;
+    histZone.innerHTML = `<option value="">— ทุกแผนก —</option>` +
+      ZONES.map(z => `<option value="${z}">${z}</option>`).join('');
+    histZone.value = curHistZone;
 
-  // Build table
-  const filterMonth = histMonth.value;
-  const filterZone  = histZone.value;
+    const filterMonth = histMonth.value;
+    const filterZone  = histZone.value;
 
-  let rows = [];
-  const months = filterMonth ? [filterMonth] : [...allMonths].reverse();
+    let rows = [];
+    const months = filterMonth ? [filterMonth] : [...allMonths].reverse();
 
-  for (const m of months) {
-    const mStats = stats[m] || {};
-    for (const p of printers) {
-      if (filterZone && p.zone !== filterZone) continue;
-      const st = mStats[p.id];
-      if (!st) continue;
-      rows.push({
-        month: m,
-        printer: p,
-        counterBW: st.counterBW,
-        counterColor: st.counterColor,
-        usedBW: st.usedBW,
-        usedColor: st.usedColor,
-        recordedAt: st.recordedAt
-      });
+    for (const m of months) {
+      const mStats = stats[m] || {};
+      for (const p of printers) {
+        if (filterZone && p.zone !== filterZone) continue;
+        const st = mStats[p.id];
+        if (!st) continue;
+        rows.push({
+          month: m,
+          printer: p,
+          counterBW: st.counterBW,
+          counterColor: st.counterColor,
+          usedBW: st.usedBW,
+          usedColor: st.usedColor,
+          recordedAt: st.recordedAt
+        });
+      }
     }
-  }
 
-  const wrap = document.getElementById('history-table-wrap');
-  if (!rows.length) {
-    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>ไม่พบข้อมูล</p></div>`;
-    return;
-  }
+    const wrap = document.getElementById('history-table-wrap');
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>ไม่พบข้อมูล</p></div>`;
+      return;
+    }
 
-  wrap.innerHTML = `
-    <table class="history-table" id="export-table">
-      <thead><tr>
-        <th>เดือน</th>
-        <th>แผนก</th>
-        <th>ห้อง / สถานที่</th>
-        <th>IP</th>
-        <th>Serial</th>
-        <th>⬛ B&W (แผ่น)</th>
-        <th>ใช้ไป B&W</th>
-        <th>🎨 สี (แผ่น)</th>
-        <th>ใช้ไป สี</th>
-        <th>วันที่บันทึก</th>
-      </tr></thead>
-      <tbody>
-        ${rows.map(r => `
-          <tr>
-            <td class="month-cell">${thMonth(r.month)}</td>
-            <td><span style="color:${ZONE_COLORS[r.printer.zone] || '#94a3b8'}">${r.printer.zone}</span></td>
-            <td>${r.printer.location}</td>
-            <td class="ip-mono">${r.printer.ip || ''}</td>
-            <td class="serial-mono">${r.printer.serial || ''}</td>
-            <td class="counter-cell">${fmtNum(r.counterBW)}</td>
-            <td class="used-cell">${r.usedBW != null ? (r.usedBW >= 0 ? '+' + fmtNum(r.usedBW) : fmtNum(r.usedBW)) : '—'}</td>
-            <td class="counter-cell" style="color:#f59e0b">${fmtNum(r.counterColor)}</td>
-            <td class="used-cell" style="color:#f59e0b">${r.usedColor != null ? (r.usedColor >= 0 ? '+' + fmtNum(r.usedColor) : fmtNum(r.usedColor)) : '—'}</td>
-            <td style="color:var(--text-muted);font-size:0.8rem">${r.recordedAt ? new Date(r.recordedAt).toLocaleDateString('th-TH') : '—'}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
+    wrap.innerHTML = `
+      <table class="history-table" id="export-table">
+        <thead><tr>
+          <th>เดือน</th>
+          <th>แผนก</th>
+          <th>ห้อง / สถานที่</th>
+          <th>IP</th>
+          <th>Serial</th>
+          <th>⬛ B&W (แผ่น)</th>
+          <th>ใช้ไป B&W</th>
+          <th>🎨 สี (แผ่น)</th>
+          <th>ใช้ไป สี</th>
+          <th>วันที่บันทึก</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td class="month-cell">${thMonth(r.month)}</td>
+              <td><span style="color:${ZONE_COLORS[r.printer.zone] || '#94a3b8'}">${r.printer.zone}</span></td>
+              <td>${r.printer.location}</td>
+              <td class="ip-mono">${r.printer.ip || ''}</td>
+              <td class="serial-mono">${r.printer.serial || ''}</td>
+              <td class="counter-cell">${fmtNum(r.counterBW)}</td>
+              <td class="used-cell">${r.usedBW != null ? (r.usedBW >= 0 ? '+' + fmtNum(r.usedBW) : fmtNum(r.usedBW)) : '—'}</td>
+              <td class="counter-cell" style="color:#f59e0b">${fmtNum(r.counterColor)}</td>
+              <td class="used-cell" style="color:#f59e0b">${r.usedColor != null ? (r.usedColor >= 0 ? '+' + fmtNum(r.usedColor) : fmtNum(r.usedColor)) : '—'}</td>
+              <td style="color:var(--text-muted);font-size:0.8rem">${r.recordedAt ? new Date(r.recordedAt).toLocaleDateString('th-TH') : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    console.error('Error loading history:', err);
+    showToast('❌ ไม่สามารถโหลดประวัติได้', 'error');
+  } finally {
+    showLoading(false);
+  }
 }
 
-// ─── Export PDF ───────────────────────────────────────────────────────────────
+// Export PDF
 function exportPDF() {
   const filterMonth = document.getElementById('hist-month').value;
   const title = filterMonth ? `สรุปมิเตอร์เครื่องพิมพ์ ${thMonth(filterMonth)}` : 'ประวัติมิเตอร์เครื่องพิมพ์';
@@ -530,36 +689,49 @@ function exportPDF() {
   printWin.onload = () => { printWin.print(); };
 }
 
-// ─── Settings Page ────────────────────────────────────────────────────────────
+// ─── Settings Page (CRUD เครื่องพิมพ์) ─────────────────────────────────────────
 async function loadSettings() {
-  await fetchAll();
-  const wrap = document.getElementById('settings-table-wrap');
-  wrap.innerHTML = `
-    <table class="settings-table">
-      <thead><tr>
-        <th>แผนก</th>
-        <th>ห้อง / สถานที่</th>
-        <th>ประเภท</th>
-        <th>IP Address</th>
-        <th>Serial / MAC</th>
-        <th>หมายเหตุ</th>
-        <th>สถานะ</th>
-      </tr></thead>
-      <tbody>
-        ${printers.map(p => `
-          <tr>
-            <td><span style="color:${ZONE_COLORS[p.zone] || '#94a3b8'}">${p.zone}</span></td>
-            <td>${p.location}</td>
-            <td>${p.type === 'สี' ? '🎨 สี' : '⬛ ขาวดำ'}</td>
-            <td class="ip-mono">${p.ip || ''}</td>
-            <td class="serial-mono">${p.serial || ''}</td>
-            <td style="font-size:0.78rem;color:var(--orange)">${p.note || ''}</td>
-            <td style="color:var(--text-muted);font-size:0.75rem">🔒 ดูอย่างเดียว</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
+  showLoading(true);
+  try {
+    await fetchAll();
+    const wrap = document.getElementById('settings-table-wrap');
+    wrap.innerHTML = `
+      <table class="settings-table">
+        <thead><tr>
+          <th>แผนก</th>
+          <th>ห้อง / สถานที่</th>
+          <th>ประเภท</th>
+          <th>IP Address</th>
+          <th>Serial / MAC</th>
+          <th>หมายเหตุ</th>
+          <th>จัดการ</th>
+        </tr></thead>
+        <tbody>
+          ${printers.map(p => `
+            <tr>
+              <td><span style="color:${ZONE_COLORS[p.zone] || '#94a3b8'}">${p.zone}</span></td>
+              <td>${p.location}</td>
+              <td>${p.type === 'สี' ? '🎨 สี' : '⬛ ขาวดำ'}</td>
+              <td class="ip-mono">${p.ip || ''}</td>
+              <td class="serial-mono">${p.serial || ''}</td>
+              <td style="font-size:0.78rem;color:var(--orange)">${p.note || ''}</td>
+              <td>
+                <div class="action-btns">
+                  <button class="btn-icon" onclick="editPrinter('${p.id}')">✏️ แก้ไข</button>
+                  <button class="btn-icon del" onclick="deletePrinter('${p.id}')">🗑️ ลบ</button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    console.error('Error loading settings:', err);
+    showToast('❌ ไม่สามารถโหลดการตั้งค่าได้', 'error');
+  } finally {
+    showLoading(false);
+  }
 }
 
 // ─── Printer Modal ────────────────────────────────────────────────────────────
@@ -583,13 +755,122 @@ function closePrinterModal(e) {
   document.getElementById('printer-modal').classList.remove('open');
 }
 
+// ─── Save Printer (Add or Update) ─────────────────────────────────────────────
+async function savePrinter() {
+  const id = document.getElementById('modal-printer-id').value;
+  const zone = document.getElementById('modal-zone').value;
+  const type = document.getElementById('modal-type').value;
+  const location = document.getElementById('modal-location').value;
+  const ip = document.getElementById('modal-ip').value;
+  const serial = document.getElementById('modal-serial').value;
+  const note = document.getElementById('modal-note').value;
+
+  if (!location) return showToast('⚠️ กรุณาระบุสถานที่ตั้งของเครื่องพิมพ์', 'warning');
+
+  const printerData = { zone, type, location, ip, serial, note };
+  const action = id ? 'updatePrinter' : 'addPrinter';
+  if (id) printerData.id = id;
+
+  showLoading(true);
+  try {
+    const res = await fetch(gsheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: action,
+        printer: printerData
+      })
+    }).then(r => r.json());
+
+    if (res && res.success) {
+      showToast(id ? '✏️ แก้ไขข้อมูลเครื่องพิมพ์แล้ว!' : '➕ เพิ่มเครื่องพิมพ์เรียบร้อย!', 'success');
+      closePrinterModal();
+      await fetchAll();
+      loadSettings();
+    } else {
+      throw new Error(res ? res.error : 'ไม่สามารถบันทึกเครื่องพิมพ์ได้');
+    }
+  } catch (err) {
+    console.error('Error saving printer:', err);
+    showToast('❌ ข้อผิดพลาดในการบันทึก: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ─── Delete Printer ───────────────────────────────────────────────────────────
+async function deletePrinter(id) {
+  const p = printers.find(x => x.id === id);
+  if (!p) return;
+  
+  if (!confirm(`⚠️ ยืนยันการลบเครื่องพิมพ์ "${p.location}" ใช่หรือไม่?\nการลบนี้จะนำประวัติการบันทึกมิเตอร์ทั้งหมดของเครื่องนี้ออกด้วย!`)) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch(gsheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'deletePrinter',
+        id: id
+      })
+    }).then(r => r.json());
+
+    if (res && res.success) {
+      showToast('🗑️ ลบเครื่องพิมพ์เรียบร้อย!', 'success');
+      await fetchAll();
+      loadSettings();
+    } else {
+      throw new Error(res ? res.error : 'ไม่สามารถลบเครื่องพิมพ์ได้');
+    }
+  } catch (err) {
+    console.error('Error deleting printer:', err);
+    showToast('❌ ลบล้มเหลว: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ─── Migration: นำเข้าข้อมูลเดิมจาก JSON Local ─────────────────────────────────────
+async function importLocalData() {
+  if (!confirm('🚀 คุณต้องการล้าง Google Sheet และแทนที่ด้วยข้อมูลจากไฟล์ printers.json + records.json ในระบบเดิมใช่หรือไม่? (ดำเนินการครั้งเดียวตอนย้ายระบบ)')) return;
+
+  showLoading(true);
+  try {
+    const [pRes, rRes] = await Promise.all([
+      fetch('data/printers.json').then(r => r.json()),
+      fetch('data/records.json').then(r => r.json())
+    ]);
+
+    const res = await fetch(gsheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'importData',
+        printers: pRes.printers,
+        records: rRes.records
+      })
+    }).then(r => r.json());
+
+    if (res && res.success) {
+      showToast('🚀 ย้ายข้อมูลเดิมเข้า Google Sheets สำเร็จเรียบร้อย!', 'success');
+      await fetchAll();
+      showPage('dashboard');
+    } else {
+      throw new Error(res ? res.error : 'การ Migration ข้อมูลไม่สำเร็จ');
+    }
+  } catch (err) {
+    console.error('Data migration failed:', err);
+    showToast('❌ การนำเข้าข้อมูลล้มเหลว: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ─── Modals: Printer Detail & Overall ─────────────────────────────────────────
 function openPrinterDetail(printerId) {
   const p = printers.find(x => x.id === printerId);
   if (!p) return;
 
   const monthKeys = [...allMonths].sort().reverse();
 
-  // ประวัติทุกเดือน
   let rows = monthKeys.map(m => {
     const st = (stats[m] || {})[printerId];
     if (!st) return null;
@@ -640,13 +921,11 @@ function showOverallDetail() {
   const latM = latestMonth();
   const monthStats = stats[latM] || {};
 
-  // รวม totals
   const totalBW = Object.values(monthStats).reduce((s, v) => s + (v.counterBW || 0), 0);
   const totalColor = Object.values(monthStats).reduce((s, v) => s + (v.counterColor || 0), 0);
   const totalUsedBW = Object.values(monthStats).reduce((s, v) => s + (v.usedBW || 0), 0);
   const totalUsedColor = Object.values(monthStats).reduce((s, v) => s + (v.usedColor || 0), 0);
 
-  // ตารางแต่ละเครื่อง
   let rows = printers.map(p => {
     const st = monthStats[p.id];
     const bw = st ? st.counterBW : null;
@@ -665,15 +944,15 @@ function showOverallDetail() {
   }).join('');
 
   const body = document.getElementById('detail-printer-body');
-  document.getElementById('detail-modal-title').textContent = `📊 สรุปยอด ${thMonth(latM)}`;
+  document.getElementById('detail-modal-title').textContent = `📊 สรุปยอดเดือน ${thMonth(latM)}`;
   body.innerHTML = `
     <div style="margin-bottom:20px">
       <div style="font-size:1rem;font-weight:600;margin-bottom:4px">📊 ${thMonth(latM)}</div>
       <div style="display:flex;gap:24px;margin-top:12px;flex-wrap:wrap">
         <div><span style="color:var(--text-muted)">⬛ B&W รวม:</span> <b>${fmtNum(totalBW)}</b></div>
         <div><span style="color:var(--text-muted)">🎨 สี รวม:</span> <b style="color:#f59e0b">${fmtNum(totalColor)}</b></div>
-        <div><span style="color:var(--text-muted)">ใช้ไป B&W:</span> <b style="color:#10b981">${totalUsedBW > 0 ? fmtNum(totalUsedBW) : '—'}</b></div>
-        <div><span style="color:var(--text-muted)">ใช้ไป สี:</span> <b style="color:#f59e0b">${totalUsedColor > 0 ? fmtNum(totalUsedColor) : '—'}</b></div>
+        <div><span style="color:var(--text-muted)">ใช้ B&W:</span> <b style="color:#10b981">${totalUsedBW > 0 ? fmtNum(totalUsedBW) : '—'}</b></div>
+        <div><span style="color:var(--text-muted)">ใช้ สี:</span> <b style="color:#f59e0b">${totalUsedColor > 0 ? fmtNum(totalUsedColor) : '—'}</b></div>
       </div>
     </div>
     <div style="max-height:360px;overflow-y:auto">
@@ -701,15 +980,6 @@ function closePrinterDetail(e) {
   document.getElementById('printer-detail-modal').classList.remove('open');
 }
 
-async function savePrinter() {
-  showToast('🔒 ฟีเจอร์แก้ไขใช้งานได้เฉพาะตอนรันบน localhost', 'error');
-  closePrinterModal();
-}
-
-async function deletePrinter(id) {
-  showToast('🔒 ฟีเจอร์ลบใช้งานได้เฉพาะตอนรันบน localhost', 'error');
-}
-
 // ─── Month Select Setup ───────────────────────────────────────────────────────
 function setupMonthSelects() {
   const sel = document.getElementById('dash-month-select');
@@ -720,14 +990,6 @@ function setupMonthSelects() {
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
-async function api(url, method = 'GET', body = null) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  if (!res.ok) { console.error('API error', res.status, await res.text()); return null; }
-  return res.json();
-}
-
 function fmtNum(n) {
   if (n === null || n === undefined) return '—';
   return Number(n).toLocaleString('th-TH');
@@ -747,13 +1009,17 @@ function thMonth(ym) {
 
 function updateCurrentDate() {
   const el = document.getElementById('current-date');
-  const d = new Date();
-  el.textContent = d.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  if (el) {
+    const d = new Date();
+    el.textContent = d.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
 }
 
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `toast ${type} show`;
-  setTimeout(() => t.classList.remove('show'), 3500);
+  if (t) {
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
 }

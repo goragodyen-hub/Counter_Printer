@@ -140,7 +140,7 @@
         </div>
 
         <div class="record-actions" id="record-actions" style="display:none;">
-          <div class="static-notice">🔒 ดูข้อมูลเท่านั้น — หากต้องการบันทึก กรุณาใช้งานผ่าน localhost</div>
+          <button class="btn btn-primary" onclick="saveAllRecords()">💾 บันทึกมิเตอร์</button>
         </div>
       </div>
     </section>
@@ -182,7 +182,8 @@
           <p class="page-sub">จัดการข้อมูลเครื่องพิมพ์ทั้งหมด</p>
         </div>
         <div class="header-actions">
-          <button class="btn btn-primary" style="display:none" id="btn-add-printer" onclick="openPrinterModal()">+ เพิ่มเครื่องพิมพ์</button>
+          <button class="btn btn-outline" id="btn-import-data" onclick="importLocalData()" style="margin-right: 8px;">🚀 นำเข้าข้อมูลเดิม</button>
+          <button class="btn btn-primary" id="btn-add-printer" onclick="openPrinterModal()">➕ เพิ่มเครื่องพิมพ์</button>
         </div>
       </div>
 
@@ -255,6 +256,12 @@
       </div>
       <div class="modal-body" id="detail-printer-body"></div>
     </div>
+  </div>
+
+  <!-- Loading Spinner Overlay -->
+  <div class="loading-overlay" id="loading-spinner">
+    <div class="spinner"></div>
+    <div class="loading-text">กำลังประมวลผล...</div>
   </div>
 
   <!-- Toast -->

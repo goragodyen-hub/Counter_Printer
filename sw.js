@@ -1,12 +1,12 @@
-const CACHE_NAME = 'printer-counter-v1';
+const CACHE_NAME = 'printer-counter-v2';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/app.js',
-  '/style.css',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
+  './',
+  './index.html',
+  './app.js',
+  './style.css',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
 ];
@@ -31,9 +31,10 @@ self.addEventListener('activate', (e) => {
 
 // Fetch
 self.addEventListener('fetch', (e) => {
-  // Skip non-GET and API calls
+  // Skip non-GET, API calls, and Google Apps Script Web App calls
   if (e.request.method !== 'GET') return;
-  if (e.request.url.includes('/api/')) return;
+  if (e.request.url.includes('script.google.com') || e.request.url.includes('script.googleusercontent.com') || e.request.url.includes('/api/')) return;
+  
   if (e.request.url.startsWith('http')) {
     e.respondWith(
       caches.match(e.request).then(cached => {

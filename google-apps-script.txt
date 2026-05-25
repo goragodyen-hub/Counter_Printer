@@ -1,5 +1,5 @@
 // =========================================================================
-// Google Apps Script สำหรับ Counter Printer Tracker
+// Google Apps Script สำหรับ Counter Printer Tracker (Static Site Version)
 // =========================================================================
 // วิธีติดตั้ง:
 //   1. เปิด Google Sheets ที่ต้องการเก็บข้อมูล
@@ -9,134 +9,198 @@
 //   5. กด Deploy → New deployment → Web App
 //      - Execute as: Me
 //      - Who has access: Anyone
-//   6. คัดลอก Web App URL ไปใส่ใน config.json ของโปรเจกต์
-// =========================================================================
-//
-// โครงสร้าง Sheet:
-//
-// Sheet "Printers" (หัวตาราง row 1):
-//   A: id | B: zone | C: location | D: ip | E: serial | F: type | G: note
-//
-// Sheet "Records" (หัวตาราง row 1):
-//   A: id | B: printerId | C: month | D: counter | E: recordedAt | F: note
+//   6. คัดลอก Web App URL ไปใส่ใน config (app.js) ของโปรเจกต์
 // =========================================================================
 
 var SHEET_PRINTERS = 'Printers';
 var SHEET_RECORDS  = 'Records';
 
 var PRINTER_HEADERS = ['id', 'zone', 'location', 'ip', 'serial', 'type', 'note'];
-var RECORD_HEADERS  = ['id', 'printerId', 'month', 'counter', 'recordedAt', 'note'];
+var RECORD_HEADERS  = ['id', 'printerId', 'month', 'counterBW', 'counterColor', 'recordedAt', 'note'];
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
-function addCorsHeaders(output) {
-  return output
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-
-function doOptions(e) {
-  return addCorsHeaders(
-    ContentService.createTextOutput('').setMimeType(ContentService.MimeType.JSON)
-  );
-}
-
-// ─── GET: ดึงข้อมูล ────────────────────────────────────────────────────────────
-// ?action=printers  → ดึงรายการเครื่องพิมพ์
-// ?action=records   → ดึงประวัติ Counter ทั้งหมด
-// ?action=all       → ดึงทั้งหมดพร้อมกัน (default)
+// ─── GET API: ดึงข้อมูล ────────────────────────────────────────────────────────────
+// ?action=all (default)  → ดึงข้อมูลทั้งหมด { printers: [...], records: [...] }
+// ?action=printers       → ดึงเฉพาะข้อมูลเครื่องพิมพ์
+// ?action=records        → ดึงเฉพาะประวัติมิเตอร์
 function doGet(e) {
   try {
     var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'all';
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var result = {};
+    var result = { success: true };
 
     if (action === 'printers' || action === 'all') {
       result.printers = readSheet(ss, SHEET_PRINTERS, PRINTER_HEADERS);
     }
     if (action === 'records' || action === 'all') {
-      result.records = readSheet(ss, SHEET_RECORDS, RECORD_HEADERS);
-      // แปลง counter เป็นตัวเลข
-      result.records = result.records.map(function(r) {
-        r.counter = r.counter ? Number(r.counter) : 0;
+      var records = readSheet(ss, SHEET_RECORDS, RECORD_HEADERS);
+      // แปลงค่ามิเตอร์ให้เป็นตัวเลข
+      result.records = records.map(function(r) {
+        r.counterBW = r.counterBW ? Number(r.counterBW) : 0;
+        r.counterColor = r.counterColor ? Number(r.counterColor) : 0;
         return r;
       });
     }
 
-    result.success = true;
-    return addCorsHeaders(
-      ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON)
-    );
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    return addCorsHeaders(
-      ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
-        .setMimeType(ContentService.MimeType.JSON)
-    );
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-// ─── POST: ซิงก์ข้อมูล ────────────────────────────────────────────────────────
-// body: { action: 'syncPrinters', printers: [...] }
-// body: { action: 'syncRecords',  records:  [...] }
-// body: { action: 'syncAll', printers: [...], records: [...] }
+// ─── POST API: จัดการข้อมูล ───────────────────────────────────────────────────────
+// จัดการการเพิ่ม ลบ แก้ไข เครื่องพิมพ์ หรือบันทึกมิเตอร์ batch
 function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
-    var action  = payload.action || 'syncAll';
-    var ss      = SpreadsheetApp.getActiveSpreadsheet();
+    var action = payload.action;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var result = { success: true, action: action };
 
-    if (action === 'syncPrinters' || action === 'syncAll') {
-      if (payload.printers) {
-        writeSheet(ss, SHEET_PRINTERS, PRINTER_HEADERS, payload.printers);
-      }
+    if (!action) {
+      throw new Error('Action is required');
     }
-    if (action === 'syncRecords' || action === 'syncAll') {
-      if (payload.records) {
-        // แปลง counter เป็นตัวเลข ก่อนเขียน
-        var recs = payload.records.map(function(r) {
-          r.counter = r.counter ? Number(r.counter) : 0;
-          return r;
+
+    if (action === 'addPrinter') {
+      // เพิ่มเครื่องพิมพ์ใหม่
+      var printer = payload.printer;
+      if (!printer) throw new Error('Printer data is required');
+      if (!printer.id) printer.id = 'P-' + new Date().getTime();
+      
+      var sheet = getOrCreateSheet(ss, SHEET_PRINTERS, PRINTER_HEADERS);
+      appendRow(sheet, PRINTER_HEADERS, printer);
+      result.printer = printer;
+
+    } else if (action === 'updatePrinter') {
+      // แก้ไขข้อมูลเครื่องพิมพ์
+      var printer = payload.printer;
+      if (!printer || !printer.id) throw new Error('Printer with ID is required');
+      
+      var sheet = getOrCreateSheet(ss, SHEET_PRINTERS, PRINTER_HEADERS);
+      updateRow(sheet, PRINTER_HEADERS, 'id', printer.id, printer);
+      result.printer = printer;
+
+    } else if (action === 'deletePrinter') {
+      // ลบเครื่องพิมพ์
+      var id = payload.id;
+      if (!id) throw new Error('Printer ID is required');
+      
+      var sheet = getOrCreateSheet(ss, SHEET_PRINTERS, PRINTER_HEADERS);
+      deleteRow(sheet, 'id', id);
+
+      // (ทางเลือก) ลบประวัติมิเตอร์ของเครื่องนี้ด้วย
+      var recSheet = getOrCreateSheet(ss, SHEET_RECORDS, RECORD_HEADERS);
+      deleteRowsByColumn(recSheet, 'printerId', id);
+
+    } else if (action === 'saveRecords') {
+      // บันทึกมิเตอร์แบบกลุ่ม (Batch) ของเดือนนั้นๆ
+      var month = payload.month;
+      var entries = payload.entries; // Array ของ { printerId, counterBW, counterColor, note }
+      
+      if (!month) throw new Error('Month is required');
+      if (!entries || !Array.isArray(entries)) throw new Error('Entries array is required');
+
+      var sheet = getOrCreateSheet(ss, SHEET_RECORDS, RECORD_HEADERS);
+      var currentRecords = readSheet(ss, SHEET_RECORDS, RECORD_HEADERS);
+      
+      // ดึง records ที่ไม่อยู่ในเงื่อนไขลบ (กรองเครื่องพิมพ์ + เดือนที่จะเซฟออก เพื่อเขียนใหม่)
+      var toDeleteIds = [];
+      for (var i = 0; i < entries.length; i++) {
+        var entry = entries[i];
+        // หา ID เดิมเพื่อเอามาเตรียมลบ
+        for (var j = 0; j < currentRecords.length; j++) {
+          if (currentRecords[j].printerId === entry.printerId && currentRecords[j].month === month) {
+            toDeleteIds.push(currentRecords[j].id);
+          }
+        }
+      }
+
+      // ลบของเก่าที่มี printerId และ month ตรงกันออก
+      if (toDeleteIds.length > 0) {
+        for (var k = 0; k < toDeleteIds.length; k++) {
+          deleteRow(sheet, 'id', toDeleteIds[k]);
+        }
+      }
+
+      // บันทึกแถวใหม่
+      var newRecords = [];
+      for (var i = 0; i < entries.length; i++) {
+        var entry = entries[i];
+        var record = {
+          id: 'R-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000),
+          printerId: entry.printerId,
+          month: month,
+          counterBW: entry.counterBW !== undefined ? Number(entry.counterBW) : 0,
+          counterColor: entry.counterColor !== undefined ? Number(entry.counterColor) : 0,
+          recordedAt: new Date().toISOString(),
+          note: entry.note || ''
+        };
+        appendRow(sheet, RECORD_HEADERS, record);
+        newRecords.push(record);
+      }
+      result.records = newRecords;
+
+    } else if (action === 'importData') {
+      // นำเข้าข้อมูลทั้งหมด (แทนที่ข้อมูลเก่าทั้งหมด - ใช้ตอนย้ายระบบครั้งเดียว)
+      var printers = payload.printers;
+      var records = payload.records;
+
+      if (printers && Array.isArray(printers)) {
+        writeSheet(ss, SHEET_PRINTERS, PRINTER_HEADERS, printers);
+      }
+      if (records && Array.isArray(records)) {
+        var formattedRecords = records.map(function(r) {
+          return {
+            id: r.id || ('R-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000)),
+            printerId: r.printerId,
+            month: r.month,
+            counterBW: r.counterBW !== undefined ? Number(r.counterBW) : (r.counter ? Number(r.counter) : 0),
+            counterColor: r.counterColor !== undefined ? Number(r.counterColor) : 0,
+            recordedAt: r.recordedAt || new Date().toISOString(),
+            note: r.note || ''
+          };
         });
-        writeSheet(ss, SHEET_RECORDS, RECORD_HEADERS, recs);
+        writeSheet(ss, SHEET_RECORDS, RECORD_HEADERS, formattedRecords);
       }
+
+    } else {
+      throw new Error('Unknown action: ' + action);
     }
 
-    return addCorsHeaders(
-      ContentService.createTextOutput(JSON.stringify({ success: true, action: action }))
-        .setMimeType(ContentService.MimeType.JSON)
-    );
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    return addCorsHeaders(
-      ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
-        .setMimeType(ContentService.MimeType.JSON)
-    );
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── DATABASE HELPERS ─────────────────────────────────────────────────────────
 
 /**
- * อ่านข้อมูลจาก Sheet แล้วแปลงเป็น array of objects
+ * อ่านข้อมูลจาก Sheet แปลงเป็น Array of Objects
  */
 function readSheet(ss, sheetName, headers) {
   var sheet = getOrCreateSheet(ss, sheetName, headers);
-  var data  = sheet.getDataRange().getValues();
-  if (data.length <= 1) return []; // มีแค่ header row
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
 
+  var data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
   var result = [];
-  for (var i = 1; i < data.length; i++) {
+
+  for (var i = 0; i < data.length; i++) {
     var row = data[i];
-    if (!row[0]) continue; // ข้าม row ว่าง
+    if (!row[0]) continue; // ข้ามบรรทัดว่าง
     var obj = {};
     for (var j = 0; j < headers.length; j++) {
       var val = row[j];
       if (val instanceof Date) {
         obj[headers[j]] = val.toISOString();
       } else {
-        obj[headers[j]] = val !== undefined && val !== null ? val.toString() : '';
+        obj[headers[j]] = (val !== undefined && val !== null) ? val : '';
       }
     }
     result.push(obj);
@@ -145,47 +209,110 @@ function readSheet(ss, sheetName, headers) {
 }
 
 /**
- * เขียนข้อมูลลง Sheet (แทนที่ทั้งหมด ยกเว้น header row)
+ * บันทึกทับข้อมูลในชีตทั้งหมด (เคลียร์เก่า เขียนใหม่ทั้งหมด)
  */
 function writeSheet(ss, sheetName, headers, dataArray) {
   var sheet = getOrCreateSheet(ss, sheetName, headers);
-
-  // ลบข้อมูลเก่า (ยกเว้น header)
+  
+  // ล้างเนื้อหาเก่าทั้งหมด ตั้งแต่แถวที่ 2 ลงไป
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
-    sheet.deleteRows(2, lastRow - 1);
+    sheet.getRange(2, 1, lastRow - 1, headers.length).clearContent();
   }
 
   if (!dataArray || dataArray.length === 0) return;
 
-  // เขียนข้อมูลใหม่ทั้งหมด
   var rows = dataArray.map(function(obj) {
     return headers.map(function(h) {
-      return obj[h] !== undefined && obj[h] !== null ? obj[h] : '';
+      return (obj[h] !== undefined && obj[h] !== null) ? obj[h] : '';
     });
   });
 
   sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  formatNumbers(sheet, sheetName, headers, rows.length);
+}
 
-  // จัด format คอลัมน์ counter เป็นตัวเลข (สำหรับ Records sheet)
-  if (sheetName === SHEET_RECORDS) {
-    var counterCol = headers.indexOf('counter') + 1;
-    if (counterCol > 0 && rows.length > 0) {
-      sheet.getRange(2, counterCol, rows.length, 1).setNumberFormat('#,##0');
+/**
+ * เพิ่ม 1 แถวใหม่ต่อท้ายชีต
+ */
+function appendRow(sheet, headers, obj) {
+  var row = headers.map(function(h) {
+    return (obj[h] !== undefined && obj[h] !== null) ? obj[h] : '';
+  });
+  sheet.appendRow(row);
+  
+  // จัด format ตัวเลขให้สวยงาม
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    formatNumbers(sheet, sheet.getName(), headers, 1, lastRow);
+  }
+}
+
+/**
+ * แก้ไขข้อมูลแถวที่ตรงกับเงื่อนไข
+ */
+function updateRow(sheet, headers, keyName, keyValue, newObj) {
+  var data = sheet.getDataRange().getValues();
+  var keyColIdx = headers.indexOf(keyName);
+  if (keyColIdx === -1) return;
+
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][keyColIdx] == keyValue) {
+      var rowRange = sheet.getRange(i + 1, 1, 1, headers.length);
+      var updatedRow = headers.map(function(h) {
+        // อัปเกรดเฉพาะ field ที่ระบุใน newObj หรือใช้ของเดิมถ้าไม่มีระบุ
+        return (newObj[h] !== undefined) ? newObj[h] : data[i][headers.indexOf(h)];
+      });
+      rowRange.setValues([updatedRow]);
+      formatNumbers(sheet, sheet.getName(), headers, 1, i + 1);
+      break;
     }
   }
 }
 
 /**
- * หา Sheet ตามชื่อ ถ้าไม่มีให้สร้างใหม่พร้อม header
+ * ลบแถวที่ตรงกับเงื่อนไขออก
+ */
+function deleteRow(sheet, keyName, keyValue) {
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var keyColIdx = headers.indexOf(keyName);
+  if (keyColIdx === -1) return;
+
+  // ค้นหาแถวจากล่างขึ้นบนเพื่อกันไม่ให้ Index ขยับเวลาลบ
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][keyColIdx] == keyValue) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+/**
+ * ลบหลายแถวตามคอลัมน์และค่าที่กำหนด
+ */
+function deleteRowsByColumn(sheet, columnName, value) {
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var colIdx = headers.indexOf(columnName);
+  if (colIdx === -1) return;
+
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][colIdx] == value) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+/**
+ * ค้นหา Sheet หรือสร้างใหม่หากไม่มี
  */
 function getOrCreateSheet(ss, sheetName, headers) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
-    // เขียน header row
+    // เขียน header
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    // จัด style header
+    // ปรับแต่ง header
     var headerRange = sheet.getRange(1, 1, 1, headers.length);
     headerRange.setBackground('#1e1b4b');
     headerRange.setFontColor('#ffffff');
@@ -193,4 +320,21 @@ function getOrCreateSheet(ss, sheetName, headers) {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+/**
+ * จัด Format คอลัมน์ตัวเลขให้สวยงาม
+ */
+function formatNumbers(sheet, sheetName, headers, numRows, startRow) {
+  var sRow = startRow || 2;
+  if (sheetName === SHEET_RECORDS && numRows > 0) {
+    var bwCol = headers.indexOf('counterBW') + 1;
+    var colCol = headers.indexOf('counterColor') + 1;
+    if (bwCol > 0) {
+      sheet.getRange(sRow, bwCol, numRows, 1).setNumberFormat('#,##0');
+    }
+    if (colCol > 0) {
+      sheet.getRange(sRow, colCol, numRows, 1).setNumberFormat('#,##0');
+    }
+  }
 }
