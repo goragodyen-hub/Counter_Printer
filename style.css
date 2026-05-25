@@ -343,6 +343,57 @@ input, select, textarea { font-family: var(--font); }
   opacity: 0.8;
 }
 
+/* ─── Printer Online Status Badge ────────────────────────────────────────────── */
+.ps-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+.ps-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Online: green glowing pulsing dot */
+.ps-online { background: rgba(16,185,129,0.15); color: #10b981; }
+.ps-online .ps-dot {
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16,185,129,0.6);
+  animation: ps-pulse-green 1.8s ease-in-out infinite;
+}
+/* Offline: red solid dot */
+.ps-offline { background: rgba(239,68,68,0.15); color: #ef4444; }
+.ps-offline .ps-dot { background: #ef4444; }
+
+/* Checking: muted grey blinking */
+.ps-checking { background: rgba(100,116,139,0.12); color: #64748b; }
+.ps-checking .ps-dot {
+  background: #64748b;
+  animation: ps-blink 1s step-start infinite;
+}
+
+/* Unknown: no IP or HTTPS block */
+.ps-unknown { background: rgba(100,116,139,0.08); color: #4b5563; }
+.ps-unknown .ps-dot { background: #4b5563; }
+
+@keyframes ps-pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+@keyframes ps-blink {
+  50% { opacity: 0.2; }
+}
+
 /* ─── Chart Section ──────────────────────────────────────────────────────────── */
 .chart-section {
   display: grid;

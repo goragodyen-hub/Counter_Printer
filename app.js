@@ -133,6 +133,7 @@ async function loadDashboard() {
   renderZoneTabs();
   renderPrinterGrid(selMonth);
   renderCharts();
+  checkAllPrinterStatus();
 }
 
 function latestMonth() {
@@ -186,6 +187,7 @@ function setZone(zone) {
   renderZoneTabs();
   const month = document.getElementById('dash-month-select').value || latestMonth();
   renderPrinterGrid(month);
+  checkAllPrinterStatus();
 }
 
 function renderPrinterGrid(month) {
@@ -230,8 +232,12 @@ function renderPrinterGrid(month) {
           ${typeBadge}
         </div>
         <div class="printer-location">${p.location}</div>
-        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; margin-top: 4px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; margin-top: 4px;">
           <span style="font-size: 0.68rem; font-weight: 600; color: var(--cyan); background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">${getPrinterModel(p.serial, p.location)}</span>
+          <span id="ps-${p.id}" class="ps-badge ps-checking" title="กำลังตรวจสอบ...">
+            <span class="ps-dot"></span>
+            <span class="ps-label">กำลังตรวจสอบ...</span>
+          </span>
         </div>
         <div class="printer-ip" style="margin-bottom: 10px">${p.ip || ''} ${p.serial ? '· ' + p.serial : ''}</div>
         <div class="printer-counter-row">
@@ -1381,6 +1387,59 @@ function showToast(msg, type = 'success') {
     t.textContent = msg;
     t.className = `toast ${type} show`;
     setTimeout(() => t.classList.remove('show'), 3500);
+  }
+}
+
+// ─── Printer Online Status Checker ────────────────────────────────────────────
+// ใช้วิธี HTTP fetch probe แทน ICMP ping (บราวเซอร์ไม่รองรับ ping โดยตรง)
+// หมายเหตุ: ใช้งานได้บนเครือข่ายภายใน (Local Network) ผ่าน HTTP
+// หากเปิดผ่าน HTTPS (เช่น GitHub Pages) บราวเซอร์จะบล็อก Mixed Content
+async function checkPrinterOnline(ip, printerId) {
+  const badge = document.getElementById(`ps-${printerId}`);
+  if (!badge) return;
+
+  if (!ip) {
+    badge.className = 'ps-badge ps-unknown';
+    badge.title = 'ไม่มี IP Address';
+    badge.querySelector('.ps-label').textContent = 'ไม่มี IP';
+    return;
+  }
+
+  // ตรวจสอบ Mixed Content: HTTPS → HTTP จะถูกบล็อก
+  if (location.protocol === 'https:') {
+    badge.className = 'ps-badge ps-unknown';
+    badge.title = 'ไม่สามารถตรวจสอบได้จาก HTTPS (Mixed Content Policy)';
+    badge.querySelector('.ps-label').textContent = '?';
+    return;
+  }
+
+  badge.className = 'ps-badge ps-checking';
+  badge.querySelector('.ps-label').textContent = 'กำลังตรวจสอบ...';
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    await fetch(`http://${ip}/`, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    badge.className = 'ps-badge ps-online';
+    badge.title = `Online: ${ip}`;
+    badge.querySelector('.ps-label').textContent = 'Online';
+  } catch (err) {
+    badge.className = 'ps-badge ps-offline';
+    badge.title = `Offline หรือไม่สามารถเชื่อมต่อได้: ${ip}`;
+    badge.querySelector('.ps-label').textContent = 'Offline';
+  }
+}
+
+function checkAllPrinterStatus() {
+  const zone = typeof activeZone !== 'undefined' ? activeZone : 'ทั้งหมด';
+  const filtered = zone === 'ทั้งหมด' ? printers : printers.filter(p => p.zone === zone);
+  for (const p of filtered) {
+    checkPrinterOnline(p.ip, p.id);
   }
 }
 
