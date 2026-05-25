@@ -773,3 +773,11 @@ input, select, textarea { font-family: var(--font); }
   color: var(--cyan);
 }
 
+.prev-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+

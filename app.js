@@ -85,6 +85,11 @@ function computeStats() {
       const rec = [...records].reverse().find(r => r.printerId === printer.id && r.month === month);
       if (!rec) continue;
       
+      // ถ้าเป็นแค่ "ข้อมูลเริ่มต้น" ให้ข้ามการนับเป็นบันทึกจริงของเดือนนี้ เพื่อแสดงเป็นค่าว่างให้กรอก
+      if (rec.note && (rec.note.includes('ข้อมูลเริ่มต้น') || rec.note.includes('สรุปจำนวนมิเตอร์เครื่องพิมพ์'))) {
+        continue;
+      }
+      
       let usedBW = null;
       let usedColor = null;
       
@@ -376,19 +381,18 @@ async function loadRecordForm() {
       <thead><tr>
         <th>ห้อง / สถานที่</th>
         <th>IP / Serial</th>
-        <th>⬛ ขาวดำ เดิม</th>
-        <th>⬛ ขาวดำ ใหม่</th>
-        <th>ใช้ไป (B&W)</th>
-        <th>🎨 สี เดิม</th>
-        <th>🎨 สี ใหม่</th>
-        <th>ใช้ไป (สี)</th>
+        <th>⬛ ขาวดำ</th>
+        <th>🎨 สี</th>
+        <th style="text-align:right;">📊 รวมของเก่า</th>
+        <th style="text-align:right;">📊 รวมของใหม่</th>
+        <th style="text-align:right;">📈 ยอดใช้ไป</th>
         <th>หมายเหตุ</th>
       </tr></thead>
       <tbody id="record-tbody">`;
 
     for (const zone of zones) {
       const zPrinters = printers.filter(p => p.zone === zone);
-      html += `<tr class="zone-group-row"><td colspan="9">▪ ${zone}</td></tr>`;
+      html += `<tr class="zone-group-row"><td colspan="8">▪ ${zone}</td></tr>`;
       for (const p of zPrinters) {
         // ค้นหาข้อมูลมิเตอร์ล่าสุดของเดือนก่อนหน้า (เพื่อเอามาตั้งต้นเป็น มิเตอร์เดิม)
         let prevBWVal = '';
@@ -427,6 +431,10 @@ async function loadRecordForm() {
         const currentColor = st && st.counterColor !== undefined ? st.counterColor : '';
         const note = (st && st.note) ? st.note : '';
 
+        const prevBW = prevBWVal !== '' ? Number(prevBWVal) : 0;
+        const prevColor = prevColorVal !== '' ? Number(prevColorVal) : 0;
+        const prevTotal = prevBW + prevColor;
+
         html += `
           <tr>
             <td>
@@ -437,7 +445,6 @@ async function loadRecordForm() {
               <div class="ip-mono">${p.ip || ''}</div>
               <div class="serial-mono">${p.serial || ''}</div>
             </td>
-            <td class="prev-counter">${prevBWVal !== '' ? fmtNum(prevBWVal) : '—'}</td>
             <td>
               <input type="number" class="counter-input"
                 id="ci-bw-${p.id}"
@@ -449,9 +456,8 @@ async function loadRecordForm() {
                 placeholder="กรอก Counter"
                 oninput="updateDiff('${p.id}')"
               />
+              <div class="prev-hint">เดิม: ${prevBWVal !== '' ? fmtNum(prevBWVal) : '—'}</div>
             </td>
-            <td id="diff-bw-${p.id}" class="diff-preview diff-zero">—</td>
-            <td class="prev-counter" style="color:#f59e0b">${prevColorVal !== '' ? fmtNum(prevColorVal) : '—'}</td>
             <td>
               <input type="number" class="counter-input"
                 id="ci-color-${p.id}"
@@ -464,8 +470,17 @@ async function loadRecordForm() {
                 oninput="updateDiff('${p.id}')"
                 ${p.type === 'ขาวดำ' ? 'disabled style="background:rgba(255,255,255,0.02);cursor:not-allowed;"' : ''}
               />
+              <div class="prev-hint" style="${p.type === 'ขาวดำ' ? 'color:transparent;user-select:none;pointer-events:none;' : ''}">เดิม: ${prevColorVal !== '' ? fmtNum(prevColorVal) : '—'}</div>
             </td>
-            <td id="diff-color-${p.id}" class="diff-preview diff-zero">—</td>
+            <td style="text-align:right;color:var(--text-secondary);font-variant-numeric:tabular-nums;" id="prev-total-${p.id}">
+              ${fmtNum(prevTotal)}
+            </td>
+            <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-primary);" id="new-total-${p.id}">
+              —
+            </td>
+            <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;" id="diff-total-${p.id}" class="diff-preview diff-zero">
+              —
+            </td>
             <td>
               <input type="text" class="note-input" id="note-${p.id}" value="${note}" placeholder="หมายเหตุ..." />
             </td>
@@ -490,39 +505,64 @@ async function loadRecordForm() {
 }
 
 function updateDiff(printerId) {
-  ['bw', 'color'].forEach(type => {
-    const input = document.getElementById(`ci-${type}-${printerId}`);
-    if (!input || input.disabled) return;
-    const prev  = input.dataset.prev !== '' ? Number(input.dataset.prev) : null;
-    const curr  = input.value !== '' ? Number(input.value) : null;
-    const diffEl= document.getElementById(`diff-${type}-${printerId}`);
-
-    if (curr === null) { 
-      diffEl.textContent = '—'; 
-      diffEl.className = 'diff-preview diff-zero'; 
-      return; 
+  const bwInput = document.getElementById(`ci-bw-${printerId}`);
+  const colorInput = document.getElementById(`ci-color-${printerId}`);
+  
+  if (!bwInput) return;
+  
+  const prevBW = bwInput.dataset.prev !== '' ? Number(bwInput.dataset.prev) : 0;
+  const currBW = bwInput.value !== '' ? Number(bwInput.value) : null;
+  
+  let prevColor = 0;
+  let currColor = null;
+  
+  if (colorInput && !colorInput.disabled) {
+    prevColor = colorInput.dataset.prev !== '' ? Number(colorInput.dataset.prev) : 0;
+    currColor = colorInput.value !== '' ? Number(colorInput.value) : null;
+  }
+  
+  // Highlight inputs if they changed from their previous values
+  bwInput.classList.toggle('changed', bwInput.value !== (bwInput.dataset.prev || ''));
+  if (colorInput && !colorInput.disabled) {
+    colorInput.classList.toggle('changed', colorInput.value !== (colorInput.dataset.prev || ''));
+  }
+  
+  const prevTotal = prevBW + prevColor;
+  const newTotalEl = document.getElementById(`new-total-${printerId}`);
+  const diffTotalEl = document.getElementById(`diff-total-${printerId}`);
+  
+  // If no new readings entered, show blank / default state
+  if (currBW === null && (colorInput === null || colorInput.disabled || currColor === null)) {
+    if (newTotalEl) newTotalEl.textContent = '—';
+    if (diffTotalEl) {
+      diffTotalEl.textContent = '—';
+      diffTotalEl.className = 'diff-preview diff-zero';
     }
-
-    if (prev === null) { 
-      diffEl.textContent = '—'; 
-      diffEl.className = 'diff-preview diff-zero'; 
-      return; 
+    return;
+  }
+  
+  // Calculate total new counter (if one field is empty, fallback to its previous value)
+  const activeBW = currBW !== null ? currBW : prevBW;
+  const activeColor = currColor !== null ? currColor : prevColor;
+  const totalNew = activeBW + activeColor;
+  
+  if (newTotalEl) {
+    newTotalEl.textContent = fmtNum(totalNew);
+  }
+  
+  if (diffTotalEl) {
+    const diff = totalNew - prevTotal;
+    if (diff > 0) {
+      diffTotalEl.textContent = `▲ ${fmtNum(diff)}`;
+      diffTotalEl.className = 'diff-preview diff-positive';
+    } else if (diff < 0) {
+      diffTotalEl.textContent = `⚠️ ${fmtNum(diff)}`;
+      diffTotalEl.className = 'diff-preview diff-negative';
+    } else {
+      diffTotalEl.textContent = '0';
+      diffTotalEl.className = 'diff-preview diff-zero';
     }
-
-    const diff = curr - prev;
-    if (diff > 0) { 
-      diffEl.textContent = `▲ ${fmtNum(diff)}`; 
-      diffEl.className = 'diff-preview diff-positive'; 
-    } else if (diff < 0) { 
-      diffEl.textContent = `⚠️ ${fmtNum(diff)}`; 
-      diffEl.className = 'diff-preview diff-negative'; 
-    } else { 
-      diffEl.textContent = '0'; 
-      diffEl.className = 'diff-preview diff-zero'; 
-    }
-
-    input.classList.toggle('changed', input.value !== (input.dataset.prev || ''));
-  });
+  }
 }
 
 // เซฟข้อมูลมิเตอร์แบบกลุ่มไปยัง Google Sheets
@@ -1456,4 +1496,63 @@ function getPrinterModel(serial, location) {
   if (loc.includes('วิชาการ (มัธยม) - เครื่องสีเล็ก')) return 'M C251FWB';
 
   return '—';
+}
+
+// ─── Realtime SNMP Auto-Fetch ────────────────────────────────────────────────
+async function fetchRealtimeCounters() {
+  const month = document.getElementById('record-month').value;
+  if (!month) {
+    showToast('⚠️ กรุณาเลือกเดือนก่อนดึงข้อมูล', 'warning');
+    return;
+  }
+  
+  // 1. ตรวจสอบว่ามีตารางฟอร์มหรือยัง ถ้าไม่มี ให้โหลดก่อน
+  const recordTbody = document.getElementById('record-tbody');
+  if (!recordTbody) {
+    showLoading(true);
+    await loadRecordForm();
+  }
+  
+  showLoading(true);
+  try {
+    const res = await fetch('/api/scan-realtime').then(r => r.json());
+    if (res && res.success) {
+      const results = res.results || {};
+      let count = 0;
+      
+      for (const pid in results) {
+        const item = results[pid];
+        const bwInput = document.getElementById(`ci-bw-${pid}`);
+        const colorInput = document.getElementById(`ci-color-${pid}`);
+        
+        let changed = false;
+        if (bwInput && item.counterBW !== undefined && item.counterBW > 0) {
+          bwInput.value = item.counterBW;
+          changed = true;
+        }
+        if (colorInput && item.counterColor !== undefined && item.counterColor > 0 && !colorInput.disabled) {
+          colorInput.value = item.counterColor;
+          changed = true;
+        }
+        
+        if (changed) {
+          updateDiff(pid);
+          count++;
+        }
+      }
+      
+      if (count > 0) {
+        showToast(`⚡ ดึงข้อมูล Realtime สำเร็จ ${count} เครื่อง!`, 'success');
+      } else {
+        showToast('⚠️ ดึงข้อมูลสำเร็จ แต่ไม่พบเครื่องพิมพ์ที่ออนไลน์ในเครือข่าย', 'warning');
+      }
+    } else {
+      throw new Error(res.error || 'ดึงข้อมูลไม่สำเร็จ');
+    }
+  } catch (err) {
+    console.error('Error fetching realtime counters:', err);
+    showToast('❌ ไม่สามารถดึงข้อมูลได้: กรุณาเปิดรันไฟล์ server.py เพื่อใช้งานแบบมี API', 'error');
+  } finally {
+    showLoading(false);
+  }
 }
