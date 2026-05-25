@@ -608,18 +608,31 @@ async function loadHistory() {
       // แสดงเฉพาะเครื่องที่มีประวัติบันทึกอย่างน้อย 1 ครั้งใน 3 เดือนนี้
       if (!st1 && !st2 && !st3) continue;
 
-      const formatVal = (st) => {
-        if (!st) return '—';
-        if (p.type === 'ขาวดำ') {
-          return fmtNum(st.counterBW);
-        } else {
-          return `${fmtNum(st.counterBW)} <span style="font-size:0.75rem;color:var(--text-muted)">/</span> <span style="color:#f59e0b">${fmtNum(st.counterColor)}</span>`;
-        }
-      };
+      // คำนวณยอดรวมสะสม (ขาวดำ + สี)
+      const tot1 = st1 ? ((st1.counterBW || 0) + (st1.counterColor || 0)) : null;
+      const tot2 = st2 ? ((st2.counterBW || 0) + (st2.counterColor || 0)) : null;
+      const tot3 = st3 ? ((st3.counterBW || 0) + (st3.counterColor || 0)) : null;
 
-      const val1 = formatVal(st1);
-      const val2 = formatVal(st2);
-      const val3 = formatVal(st3);
+      const val1 = tot1 !== null ? fmtNum(tot1) : '—';
+      const val2 = tot2 !== null ? fmtNum(tot2) : '—';
+      const val3 = tot3 !== null ? fmtNum(tot3) : '—';
+
+      // คำนวณยอดที่ใช้ไปล่าสุด (เดือน M1 เทียบกับ M2)
+      let diffText = '—';
+      let diffClass = 'diff-zero';
+      if (tot1 !== null && tot2 !== null) {
+        const diff = tot1 - tot2;
+        if (diff > 0) {
+          diffText = `+${fmtNum(diff)}`;
+          diffClass = 'diff-positive';
+        } else if (diff < 0) {
+          diffText = `⚠️ ${fmtNum(diff)}`;
+          diffClass = 'diff-negative';
+        } else {
+          diffText = '0';
+          diffClass = 'diff-zero';
+        }
+      }
 
       const recordedAt = st1 && st1.recordedAt 
         ? new Date(st1.recordedAt).toLocaleDateString('th-TH') 
@@ -632,6 +645,8 @@ async function loadHistory() {
         val3,
         val2,
         val1,
+        diffText,
+        diffClass,
         recordedAt
       });
     }
@@ -650,7 +665,8 @@ async function loadHistory() {
           <th>Serial No.</th>
           <th style="text-align:right">${thMonth(m3)}</th>
           <th style="text-align:right">${thMonth(m2)}</th>
-          <th style="text-align:right;background:rgba(255,255,255,0.03);">${thMonth(m1)} (ล่าสุด)</th>
+          <th style="text-align:right;background:rgba(255,255,255,0.03);">${thMonth(m1)} (สะสมล่าสุด)</th>
+          <th style="text-align:right;color:var(--cyan)">ใช้ไปล่าสุด (แผ่น)</th>
           <th style="text-align:center">วันที่บันทึก (ล่าสุด)</th>
         </tr></thead>
         <tbody>
@@ -662,6 +678,7 @@ async function loadHistory() {
               <td class="counter-cell" style="text-align:right">${r.val3}</td>
               <td class="counter-cell" style="text-align:right">${r.val2}</td>
               <td class="counter-cell" style="text-align:right;background:rgba(255,255,255,0.02);font-weight:700;">${r.val1}</td>
+              <td class="counter-cell ${r.diffClass}" style="text-align:right;font-weight:600">${r.diffText}</td>
               <td style="color:var(--text-muted);font-size:0.8rem;text-align:center">${r.recordedAt}</td>
             </tr>
           `).join('')}
@@ -717,7 +734,10 @@ function exportPDF() {
       td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
       tr:nth-child(even) td { background: #f9fafb; }
       .serial-mono { font-family: monospace; }
-      .counter-cell { font-variant-numeric: tabular-nums; }
+      .counter-cell { font-variant-numeric: tabular-nums; text-align: right; }
+      .diff-positive { color: #10b981; }
+      .diff-negative { color: #ef4444; }
+      .diff-zero { color: #555; }
     </style>
     </head><body>
     <h1>🖨️ ${title}</h1>
@@ -746,18 +766,19 @@ function exportCSV() {
 
     if (!st1 && !st2 && !st3) continue;
 
-    const formatExcelVal = (st) => {
-      if (!st) return '—';
-      if (p.type === 'ขาวดำ') {
-        return st.counterBW;
-      } else {
-        return `B:${st.counterBW} / C:${st.counterColor}`;
-      }
-    };
+    const tot1 = st1 ? ((st1.counterBW || 0) + (st1.counterColor || 0)) : null;
+    const tot2 = st2 ? ((st2.counterBW || 0) + (st2.counterColor || 0)) : null;
+    const tot3 = st3 ? ((st3.counterBW || 0) + (st3.counterColor || 0)) : null;
 
-    const val1 = formatExcelVal(st1);
-    const val2 = formatExcelVal(st2);
-    const val3 = formatExcelVal(st3);
+    const val1 = tot1 !== null ? tot1 : '—';
+    const val2 = tot2 !== null ? tot2 : '—';
+    const val3 = tot3 !== null ? tot3 : '—';
+
+    let diffText = '—';
+    if (tot1 !== null && tot2 !== null) {
+      const diff = tot1 - tot2;
+      diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+    }
 
     const recordedAt = st1 && st1.recordedAt 
       ? new Date(st1.recordedAt).toLocaleDateString('th-TH') 
@@ -770,6 +791,7 @@ function exportCSV() {
       val3,
       val2,
       val1,
+      diffText,
       recordedAt
     });
   }
@@ -777,7 +799,7 @@ function exportCSV() {
   if (!rows.length) return showToast('ไม่มีข้อมูลสำหรับ Export', 'error');
 
   // สร้างไฟล์ CSV
-  const headers = ['แผนก', 'ห้อง / สถานที่', 'Serial No.', thMonth(m3), thMonth(m2), `${thMonth(m1)} (ล่าสุด)`, 'วันที่บันทึก (ล่าสุด)'];
+  const headers = ['แผนก', 'ห้อง / สถานที่', 'Serial No.', thMonth(m3), thMonth(m2), `${thMonth(m1)} (สะสมล่าสุด)`, 'ใช้ไปล่าสุด (แผ่น)', 'วันที่บันทึก (ล่าสุด)'];
   
   const csvRows = [
     headers.join(','),
@@ -788,6 +810,7 @@ function exportCSV() {
       `"${r.val3}"`,
       `"${r.val2}"`,
       `"${r.val1}"`,
+      `"${r.diffText}"`,
       `"${r.recordedAt}"`
     ].join(','))
   ];
