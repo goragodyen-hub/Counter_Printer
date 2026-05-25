@@ -230,7 +230,10 @@ function renderPrinterGrid(month) {
           ${typeBadge}
         </div>
         <div class="printer-location">${p.location}</div>
-        <div class="printer-ip">${p.ip || ''} ${p.serial ? '· ' + p.serial : ''}</div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; margin-top: 4px;">
+          <span style="font-size: 0.68rem; font-weight: 600; color: var(--cyan); background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">${getPrinterModel(p.serial, p.location)}</span>
+        </div>
+        <div class="printer-ip" style="margin-bottom: 10px">${p.ip || ''} ${p.serial ? '· ' + p.serial : ''}</div>
         <div class="printer-counter-row">
           <div>
             <div class="counter-label">⬛ ขาวดำ ล่าสุด</div>
