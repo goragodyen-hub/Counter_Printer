@@ -689,6 +689,74 @@ function exportPDF() {
   printWin.onload = () => { printWin.print(); };
 }
 
+// Export CSV (Excel)
+function exportCSV() {
+  const filterMonth = document.getElementById('hist-month').value;
+  const filterZone  = document.getElementById('hist-zone').value;
+
+  let rows = [];
+  const months = filterMonth ? [filterMonth] : [...allMonths].reverse();
+
+  for (const m of months) {
+    const mStats = stats[m] || {};
+    for (const p of printers) {
+      if (filterZone && p.zone !== filterZone) continue;
+      const st = mStats[p.id];
+      if (!st) continue;
+      rows.push({
+        month: m,
+        zone: p.zone,
+        location: p.location,
+        ip: p.ip || '',
+        serial: p.serial || '',
+        counterBW: st.counterBW || 0,
+        usedBW: st.usedBW != null ? st.usedBW : '',
+        counterColor: st.counterColor || 0,
+        usedColor: st.usedColor != null ? st.usedColor : '',
+        recordedAt: st.recordedAt ? new Date(st.recordedAt).toLocaleDateString('th-TH') : ''
+      });
+    }
+  }
+
+  if (!rows.length) return showToast('ไม่มีข้อมูลสำหรับ Export', 'error');
+
+  // สร้างไฟล์ CSV
+  const headers = ['เดือน', 'แผนก', 'ห้อง / สถานที่', 'IP Address', 'Serial No.', 'มิเตอร์ขาวดำ', 'ยอดใช้ขาวดำ (แผ่น)', 'มิเตอร์สี', 'ยอดใช้สี (แผ่น)', 'วันที่บันทึก'];
+  
+  // แปลงข้อมูลแต่ละแถวให้อยู่ในรูปแบบ CSV และหลีกเลี่ยงเครื่องหมาย comma ในข้อความ
+  const csvRows = [
+    headers.join(','),
+    ...rows.map(r => [
+      `"${thMonth(r.month)}"`,
+      `"${r.zone}"`,
+      `"${r.location.replace(/"/g, '""')}"`,
+      `"${r.ip}"`,
+      `"${r.serial}"`,
+      r.counterBW,
+      r.usedBW,
+      r.counterColor,
+      r.usedColor,
+      `"${r.recordedAt}"`
+    ].join(','))
+  ];
+
+  // เพิ่ม UTF-8 BOM (\uFEFF) เพื่อป้องกันไม่ให้ภาษาไทยแสดงผลเป็นตัวอักษรต่างด้าวเมื่อเปิดใน Excel
+  const csvContent = "\uFEFF" + csvRows.join("\n");
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  
+  const filenameMonth = filterMonth ? `_${filterMonth}` : '';
+  link.setAttribute("download", `report_printer_counter${filenameMonth}.csv`);
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 // ─── Settings Page (CRUD เครื่องพิมพ์) ─────────────────────────────────────────
 async function loadSettings() {
   showLoading(true);
