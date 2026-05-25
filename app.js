@@ -45,7 +45,19 @@ async function fetchAll() {
     const res = await fetch(`${gsheetsUrl}?action=all`).then(r => r.json());
     if (res && res.success) {
       printers = res.printers || [];
-      records = res.records || [];
+      records = (res.records || []).map(r => {
+        // ปรับจูน timezone จาก ISO เป็น YYYY-MM ในเขตนครกรุงเทพฯ (GMT+7) เพื่อให้ตรงกับใน Google Sheet เสมอ
+        if (r.month && r.month.includes('T')) {
+          const d = new Date(r.month);
+          if (!isNaN(d.getTime())) {
+            const thaiTime = new Date(d.getTime() + (7 * 60 * 60 * 1000));
+            const year = thaiTime.getUTCFullYear();
+            const month = String(thaiTime.getUTCMonth() + 1).padStart(2, '0');
+            r.month = `${year}-${month}`;
+          }
+        }
+        return r;
+      });
       computeStats();
     } else {
       throw new Error(res ? res.error : 'ไม่สามารถโหลดข้อมูลได้');
@@ -69,7 +81,8 @@ function computeStats() {
     const monthIdx = months.indexOf(month);
     
     for (const printer of printers) {
-      const rec = records.find(r => r.printerId === printer.id && r.month === month);
+      // ค้นหาข้อมูลล่าสุดในเดือนนั้นๆ (จากท้ายอาร์เรย์) เผื่อกรณีมีข้อมูลซ้ำ
+      const rec = [...records].reverse().find(r => r.printerId === printer.id && r.month === month);
       if (!rec) continue;
       
       let usedBW = null;
@@ -80,7 +93,7 @@ function computeStats() {
         const prevMonths = months.slice(0, monthIdx).reverse();
         let prevRec = null;
         for (const pm of prevMonths) {
-          prevRec = records.find(r => r.printerId === printer.id && r.month === pm);
+          prevRec = [...records].reverse().find(r => r.printerId === printer.id && r.month === pm);
           if (prevRec) break;
         }
         
@@ -389,7 +402,7 @@ async function loadRecordForm() {
         if (curMonthIdx > 0) {
           const prevMonths = sortedMonths.slice(0, curMonthIdx).reverse();
           for (const pm of prevMonths) {
-            prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+            prevRec = [...records].reverse().find(r => r.printerId === p.id && r.month === pm);
             if (prevRec) break;
           }
         } else if (curMonthIdx === -1) {
@@ -397,7 +410,7 @@ async function loadRecordForm() {
           const prevMonths = [...sortedMonths].reverse();
           for (const pm of prevMonths) {
             if (pm < month) {
-              prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+              prevRec = [...records].reverse().find(r => r.printerId === p.id && r.month === pm);
               if (prevRec) break;
             }
           }
@@ -1134,14 +1147,14 @@ function onModalMonthChange(printerId) {
   if (curMonthIdx > 0) {
     const prevMonths = sortedMonths.slice(0, curMonthIdx).reverse();
     for (const pm of prevMonths) {
-      prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+      prevRec = [...records].reverse().find(r => r.printerId === p.id && r.month === pm);
       if (prevRec) break;
     }
   } else if (curMonthIdx === -1) {
     const prevMonths = [...sortedMonths].reverse();
     for (const pm of prevMonths) {
       if (pm < month) {
-        prevRec = records.find(r => r.printerId === p.id && r.month === pm);
+        prevRec = [...records].reverse().find(r => r.printerId === p.id && r.month === pm);
         if (prevRec) break;
       }
     }
@@ -1163,7 +1176,7 @@ function onModalMonthChange(printerId) {
   if (inputColor) inputColor.dataset.prev = prevColorVal;
 
   // ตรวจสอบว่าเดือนนี้เคยบันทึกไปแล้วหรือไม่ หากมีให้ดึงมาแสดงเพื่อทำการแก้ไขได้
-  const currentRecord = records.find(r => r.printerId === p.id && r.month === month);
+  const currentRecord = [...records].reverse().find(r => r.printerId === p.id && r.month === month);
   if (currentRecord) {
     inputBW.value = currentRecord.counterBW !== undefined ? currentRecord.counterBW : '';
     if (inputColor && p.type === 'สี') {
