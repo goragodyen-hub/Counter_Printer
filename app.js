@@ -85,16 +85,13 @@ function computeStats() {
       const rec = [...records].reverse().find(r => r.printerId === printer.id && r.month === month);
       if (!rec) continue;
       
-      // ถ้าเป็นแค่ "ข้อมูลเริ่มต้น" ให้ข้ามการนับเป็นบันทึกจริงของเดือนนี้ เพื่อแสดงเป็นค่าว่างให้กรอก
-      if (rec.note && (rec.note.includes('ข้อมูลเริ่มต้น') || rec.note.includes('สรุปจำนวนมิเตอร์เครื่องพิมพ์'))) {
-        continue;
-      }
+      const isBaseline = rec.note && (rec.note.includes('ข้อมูลเริ่มต้น') || rec.note.includes('สรุปจำนวนมิเตอร์เครื่องพิมพ์'));
       
       let usedBW = null;
       let usedColor = null;
       
       // ค้นหาข้อมูลเดือนล่าสุดก่อนหน้า (รองรับการข้ามเดือนหรือข้อมูลไม่ต่อเนื่อง)
-      if (monthIdx > 0) {
+      if (monthIdx > 0 && !isBaseline) {
         const prevMonths = months.slice(0, monthIdx).reverse();
         let prevRec = null;
         for (const pm of prevMonths) {
@@ -116,7 +113,9 @@ function computeStats() {
         counterColor,
         usedBW,
         usedColor,
-        recordedAt: rec.recordedAt
+        recordedAt: rec.recordedAt,
+        note: rec.note || '',
+        isBaseline: !!isBaseline
       };
     }
   }
@@ -160,7 +159,7 @@ function latestMonth() {
 function renderSummaryCards(month) {
   const monthStats = stats[month] || {};
   const totalPrinters = printers.length;
-  const recorded = Object.keys(monthStats).length;
+  const recorded = Object.values(monthStats).filter(st => !st.isBaseline).length;
   
   const totalUsedBW = Object.values(monthStats).reduce((s, v) => s + (v.usedBW || 0), 0);
   const totalUsedColor = Object.values(monthStats).reduce((s, v) => s + (v.usedColor || 0), 0);
@@ -425,10 +424,10 @@ async function loadRecordForm() {
           prevColorVal = prevRec.counterColor !== undefined ? prevRec.counterColor : 0;
         }
 
-        // ค่าในเดือนปัจจุบันที่บันทึกไปแล้ว (ถ้ามี)
+        // ค่าในเดือนปัจจุบันที่บันทึกไปแล้ว (ถ้ามีและไม่ใช่ข้อมูลเริ่มต้น)
         const st = monthStats[p.id];
-        const currentBW = st && st.counterBW !== undefined ? st.counterBW : '';
-        const currentColor = st && st.counterColor !== undefined ? st.counterColor : '';
+        const currentBW = st && !st.isBaseline && st.counterBW !== undefined ? st.counterBW : '';
+        const currentColor = st && !st.isBaseline && st.counterColor !== undefined ? st.counterColor : '';
         const note = (st && st.note) ? st.note : '';
 
         const prevBW = prevBWVal !== '' ? Number(prevBWVal) : 0;
