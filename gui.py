@@ -390,7 +390,8 @@ class PrinterMonitorApp(tk.Tk):
         # 1. Main Layout: Header, Status Bar, Content
         self.grid_rowconfigure(0, weight=0) # Header
         self.grid_rowconfigure(1, weight=0) # Filter Bar
-        self.grid_rowconfigure(2, weight=1) # Main Scrollable Grid Area
+        self.grid_rowconfigure(2, weight=0) # Summary Bar
+        self.grid_rowconfigure(3, weight=1) # Main Scrollable Grid Area
         self.grid_columnconfigure(0, weight=1)
         
         # ─── HEADER ───────────────────────────────────────────────────────────
@@ -442,10 +443,15 @@ class PrinterMonitorApp(tk.Tk):
         self.stats_frame = tk.Frame(filter_stats_frame, bg=BG_MAIN)
         self.stats_frame.grid(row=0, column=1, sticky="e")
         self.render_stats()
+
+        # ─── SUMMARY BAR (ยอดรวม BW + สี) ────────────────────────────────────
+        self.summary_frame = tk.Frame(self, bg="#0f172a", padx=20, pady=0)
+        self.summary_frame.grid(row=2, column=0, sticky="ew")
+        self.render_summary()
         
         # ─── SCROLLABLE CONTENT GRID ──────────────────────────────────────────
         grid_outer_frame = tk.Frame(self, bg=BG_MAIN)
-        grid_outer_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        grid_outer_frame.grid(row=3, column=0, sticky="nsew", padx=20, pady=(0, 20))
         grid_outer_frame.grid_rowconfigure(0, weight=1)
         grid_outer_frame.grid_columnconfigure(0, weight=1)
         
@@ -537,6 +543,151 @@ class PrinterMonitorApp(tk.Tk):
             val_lbl.pack(anchor="center")
             lbl = tk.Label(card, text=label, font=self.font_badge, fg=TEXT_GRAY, bg=BG_CARD)
             lbl.pack(anchor="center")
+
+        self.render_summary()
+
+    def render_summary(self):
+        """แสดงแถบสรุปยอดรวม BW + สี รวมทุกเครื่อง และแยกตามโซน"""
+        for widget in self.summary_frame.winfo_children():
+            widget.destroy()
+
+        # คำนวณยอดรวมเฉพาะเครื่องที่ออนไลน์และมีข้อมูล
+        total_bw = 0
+        total_color = 0
+        zone_totals = {}  # zone -> {bw, color, count}
+
+        for p in self.printers:
+            pid = p["id"]
+            zone = p["zone"]
+            cached = self.printer_data_cache.get(pid, {})
+            if not cached.get("online", False):
+                continue
+            bw = cached.get("bw", "—")
+            color = cached.get("color", "—")
+            bw_n = bw if isinstance(bw, int) else 0
+            color_n = color if isinstance(color, int) else 0
+            total_bw += bw_n
+            total_color += color_n
+            if zone not in zone_totals:
+                zone_totals[zone] = {"bw": 0, "color": 0, "count": 0}
+            zone_totals[zone]["bw"] += bw_n
+            zone_totals[zone]["color"] += color_n
+            zone_totals[zone]["count"] += 1
+
+        has_data = any(self.printer_data_cache.get(p["id"], {}).get("online", False) for p in self.printers)
+        if not has_data:
+            # ยังไม่ได้สแกน – ซ่อน summary bar
+            self.summary_frame.configure(pady=0)
+            return
+
+        self.summary_frame.configure(pady=8)
+
+        # ── Header label ──
+        hdr = tk.Label(
+            self.summary_frame,
+            text="📊 ยอดรวมมิเตอร์สะสม (เฉพาะออนไลน์)",
+            font=("Segoe UI", 9, "bold"),
+            fg=TEXT_GRAY,
+            bg="#0f172a"
+        )
+        hdr.pack(anchor="w", pady=(0, 4))
+
+        # ── Scrollable row of zone cards + grand total ──
+        cards_row = tk.Frame(self.summary_frame, bg="#0f172a")
+        cards_row.pack(fill="x")
+
+        ZONES_ORDER = ["มัธยม", "ประถม", "อนุบาล", "ห้องปฏิบัติการ"]
+
+        def fmt(n):
+            return f"{n:,}" if n else "—"
+
+        def make_zone_card(parent, zone_name, bw, color, count, bg_col, accent_col):
+            card = tk.Frame(parent, bg=bg_col, padx=12, pady=8,
+                            highlightthickness=1, highlightbackground="#334155")
+            card.pack(side="left", padx=(0, 8), fill="y")
+
+            # Zone name
+            tk.Label(card, text=zone_name, font=("Segoe UI", 8, "bold"),
+                     fg=accent_col, bg=bg_col).pack(anchor="w")
+            tk.Label(card, text=f"{count} เครื่องออนไลน์",
+                     font=("Segoe UI", 7), fg=TEXT_GRAY, bg=bg_col).pack(anchor="w", pady=(0, 4))
+
+            # BW
+            bw_row = tk.Frame(card, bg=bg_col)
+            bw_row.pack(fill="x")
+            tk.Label(bw_row, text="⬛ BW:", font=("Segoe UI", 8),
+                     fg=TEXT_GRAY, bg=bg_col).pack(side="left")
+            tk.Label(bw_row, text=fmt(bw), font=("Segoe UI", 9, "bold"),
+                     fg=BW_COLOR, bg=bg_col).pack(side="right")
+
+            # Color
+            c_row = tk.Frame(card, bg=bg_col)
+            c_row.pack(fill="x", pady=(2, 0))
+            tk.Label(c_row, text="🎨 สี:", font=("Segoe UI", 8),
+                     fg=TEXT_GRAY, bg=bg_col).pack(side="left")
+            tk.Label(c_row, text=fmt(color), font=("Segoe UI", 9, "bold"),
+                     fg=COLOR_COLOR, bg=bg_col).pack(side="right")
+
+            # Total
+            tot_row = tk.Frame(card, bg=bg_col)
+            tot_row.pack(fill="x", pady=(4, 0))
+            sep2 = tk.Label(card, text="─" * 20, font=("Consolas", 7),
+                            fg="#334155", bg=bg_col)
+            sep2.pack(fill="x")
+            tk.Label(tot_row, text="รวม:", font=("Segoe UI", 8),
+                     fg=TEXT_GRAY, bg=bg_col).pack(side="left")
+            tk.Label(tot_row, text=fmt(bw + color),
+                     font=("Segoe UI", 10, "bold"),
+                     fg="#f8fafc", bg=bg_col).pack(side="right")
+
+        # Zone cards
+        for zone in ZONES_ORDER:
+            if zone not in zone_totals:
+                continue
+            zt = zone_totals[zone]
+            zcol = ZONE_COLORS.get(zone, ACCENT)
+            make_zone_card(cards_row, zone,
+                           zt["bw"], zt["color"], zt["count"],
+                           BG_CARD, zcol)
+
+        # Grand total card
+        grand_card = tk.Frame(cards_row, bg="#1e1b4b", padx=14, pady=8,
+                              highlightthickness=1, highlightbackground=ACCENT)
+        grand_card.pack(side="left", padx=(16, 0), fill="y")
+
+        tk.Label(grand_card, text="🏆 รวมทั้งหมด",
+                 font=("Segoe UI", 9, "bold"), fg="#c4b5fd",
+                 bg="#1e1b4b").pack(anchor="w")
+        tk.Label(grand_card, text="ทุกแผนก",
+                 font=("Segoe UI", 7), fg=TEXT_GRAY,
+                 bg="#1e1b4b").pack(anchor="w", pady=(0, 4))
+
+        bw_g = tk.Frame(grand_card, bg="#1e1b4b")
+        bw_g.pack(fill="x")
+        tk.Label(bw_g, text="⬛ BW:", font=("Segoe UI", 8),
+                 fg=TEXT_GRAY, bg="#1e1b4b").pack(side="left")
+        tk.Label(bw_g, text=fmt(total_bw),
+                 font=("Segoe UI", 10, "bold"), fg=BW_COLOR,
+                 bg="#1e1b4b").pack(side="right")
+
+        c_g = tk.Frame(grand_card, bg="#1e1b4b")
+        c_g.pack(fill="x", pady=(2, 0))
+        tk.Label(c_g, text="🎨 สี:", font=("Segoe UI", 8),
+                 fg=TEXT_GRAY, bg="#1e1b4b").pack(side="left")
+        tk.Label(c_g, text=fmt(total_color),
+                 font=("Segoe UI", 10, "bold"), fg=COLOR_COLOR,
+                 bg="#1e1b4b").pack(side="right")
+
+        tk.Label(grand_card, text="─" * 22, font=("Consolas", 7),
+                 fg="#4338ca", bg="#1e1b4b").pack(fill="x")
+
+        tot_g = tk.Frame(grand_card, bg="#1e1b4b")
+        tot_g.pack(fill="x")
+        tk.Label(tot_g, text="รวม:", font=("Segoe UI", 8),
+                 fg=TEXT_GRAY, bg="#1e1b4b").pack(side="left")
+        tk.Label(tot_g, text=fmt(total_bw + total_color),
+                 font=("Segoe UI", 12, "bold"), fg="#a78bfa",
+                 bg="#1e1b4b").pack(side="right")
             
     def load_printers(self):
         # ดึงข้อมูลเครื่องพิมพ์ล่าสุดจาก Google Sheets มาอัปเดตไฟล์ในเครื่องเบื้องหลัง (Background Thread)
@@ -846,12 +997,24 @@ class PrinterMonitorApp(tk.Tk):
         self.scan_btn.configure(text="⚡ สแกนเรียลไทม์", bg=ACCENT, state="normal")
         
         # Redraw
-        self.render_stats()
+        self.render_stats()   # render_stats จะเรียก render_summary ให้อัตโนมัติ
         self.render_grid()
         
         # Show mini notification
         online_count = sum(1 for d in results.values() if d["online"])
-        messagebox.showinfo("สแกนสำเร็จ", f"⚡ ตรวจสอบและดึงยอดพิมพ์สำเร็จ!\n- ออนไลน์: {online_count} เครื่อง\n- ออฟไลน์: {len(results) - online_count} เครื่อง")
+        total_bw = sum(d["bw"] for d in results.values() if isinstance(d.get("bw"), int))
+        total_color = sum(d["color"] for d in results.values() if isinstance(d.get("color"), int))
+        messagebox.showinfo(
+            "สแกนสำเร็จ",
+            f"⚡ ตรวจสอบและดึงยอดพิมพ์สำเร็จ!\n"
+            f"- ออนไลน์: {online_count} เครื่อง\n"
+            f"- ออฟไลน์: {len(results) - online_count} เครื่อง\n"
+            f"────────────────\n"
+            f"📊 ยอดมิเตอร์รวม (ออนไลน์):\n"
+            f"  ⬛ BW รวม : {total_bw:,} แผ่น\n"
+            f"  🎨 สี รวม : {total_color:,} แผ่น\n"
+            f"  🏆 รวมทั้งหมด : {total_bw + total_color:,} แผ่น"
+        )
 
 if __name__ == "__main__":
     try:

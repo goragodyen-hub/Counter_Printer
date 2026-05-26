@@ -14,8 +14,8 @@
       "printerId": "P002",
       "month": "2026-04",
       "recordedAt": "2026-04-30T00:00:00",
-      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260430)",
-      "counterBW": 163,
+      "note": "ข้อมูลเริ่มต้น (สรุปจำนวนมิเตอร์เครื่องพิมพ์_20260430) - เครื่องถูก reset counter",
+      "counterBW": 0,
       "counterColor": 0
     },
     {
@@ -148,10 +148,10 @@
       "id": "R-INIT-JAN-P002",
       "printerId": "P002",
       "month": "2026-01",
-      "counterBW": 155,
+      "counterBW": 0,
       "counterColor": 0,
       "recordedAt": "2026-01-23T00:00:00",
-      "note": "ข้อมูลเริ่มต้น ม.ค. 2026"
+      "note": "ข้อมูลเริ่มต้น ม.ค. 2026 - เครื่องถูก reset counter"
     },
     {
       "id": "R-INIT-JAN-P003",
