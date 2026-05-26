@@ -1197,15 +1197,27 @@ function openPrinterDetail(printerId) {
   let rows = monthKeys.map(m => {
     const st = (stats[m] || {})[printerId];
     if (!st) return null;
-    const usedBW = st.usedBW != null ? (st.usedBW >= 0 ? '+' + fmtNum(st.usedBW) : fmtNum(st.usedBW)) : '—';
-    const usedColor = st.usedColor != null ? (st.usedColor >= 0 ? '+' + fmtNum(st.usedColor) : fmtNum(st.usedColor)) : '—';
+    const usedBW    = st.usedBW    != null ? st.usedBW    : null;
+    const usedColor = st.usedColor != null ? st.usedColor : null;
+    const usedTotal = (usedBW !== null || usedColor !== null)
+      ? (usedBW || 0) + (usedColor || 0) : null;
+    const counterTotal = (st.counterBW || 0) + (st.counterColor || 0);
+
+    const fmtUsed = (v) => v == null ? '—' : (v >= 0 ? `<span style="color:#10b981">+${fmtNum(v)}</span>` : `<span style="color:#ef4444">${fmtNum(v)}</span>`);
+    const fmtUsedTotal = (v) => v == null ? '—'
+      : v > 0  ? `<span style="font-weight:700;color:#a78bfa">+${fmtNum(v)}</span>`
+      : v < 0  ? `<span style="font-weight:700;color:#ef4444">${fmtNum(v)}</span>`
+      : `<span style="color:var(--text-muted)">0</span>`;
+
     return `
-      <tr>
-        <td style="font-weight:600;color:var(--accent-light)">${thMonth(m)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtNum(st.counterBW)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;color:#f59e0b">${fmtNum(st.counterColor)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${usedBW}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;color:#f59e0b">${usedColor}</td>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+        <td style="font-weight:600;color:var(--accent-light);padding:7px 10px">${thMonth(m)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtNum(st.counterBW)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;color:#f59e0b;padding:7px 10px">${fmtNum(st.counterColor)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px;color:#94a3b8;font-size:0.78rem">${fmtNum(counterTotal)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtUsed(usedBW)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtUsed(usedColor)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px;background:rgba(124,58,237,0.07);border-left:1px solid rgba(124,58,237,0.2)">${fmtUsedTotal(usedTotal)}</td>
       </tr>`;
   }).filter(Boolean).join('');
 
@@ -1263,18 +1275,20 @@ function openPrinterDetail(printerId) {
     ${quickRecordHtml}
 
     <h3 style="font-size:0.92rem;margin:24px 0 12px 0;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--text-secondary)">📋 ประวัติการบันทึกย้อนหลัง</h3>
-    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+    <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
       <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
         <thead>
-          <tr style="background:rgba(255,255,255,0.05)">
-            <th style="text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)">เดือน</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">⬛ B&W</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">🎨 สี</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">ใช้ B&W</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">ใช้ สี</th>
+          <tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;z-index:1">
+            <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)">เดือน</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border)">⬛ B&W</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border)">🎨 สี</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#94a3b8;font-size:0.72rem">รวมสะสม</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#10b981">ใช้ B&W</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#f59e0b">ใช้ สี</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#a78bfa;background:rgba(124,58,237,0.08);border-left:1px solid rgba(124,58,237,0.2)">✨ รวมใช้ไป</th>
           </tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-muted)">ไม่มีข้อมูล</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-muted)">ไม่มีข้อมูล</td></tr>'}</tbody>
       </table>
     </div>
   `;
