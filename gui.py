@@ -539,6 +539,36 @@ class PrinterMonitorApp(tk.Tk):
             lbl.pack(anchor="center")
             
     def load_printers(self):
+        # ดึงข้อมูลเครื่องพิมพ์ล่าสุดจาก Google Sheets มาอัปเดตไฟล์ในเครื่องเบื้องหลัง (Background Thread)
+        def sync_thread():
+            if not GSHEETS_URL:
+                return
+            try:
+                url = f"{GSHEETS_URL}?action=all"
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=8) as response:
+                    res_body = response.read().decode('utf-8')
+                    res_json = json.loads(res_body)
+                    if res_json.get("success") and "printers" in res_json:
+                        printers = res_json["printers"]
+                        printers_path = os.path.join(BASE_DIR, "data", "printers.json")
+                        os.makedirs(os.path.dirname(printers_path), exist_ok=True)
+                        with open(printers_path, "w", encoding="utf-8") as f:
+                            json.dump({"printers": printers}, f, ensure_ascii=False, indent=2)
+                        
+                        # อัปเดตรายชื่อเครื่องพิมพ์ใน GUI
+                        self.printers = printers
+                        
+                        # เริ่มสแกนเรียลไทม์ใหม่เพื่อให้แสดงผลเครื่องที่เพิ่มเข้ามา
+                        self.after(0, self.render_stats)
+                        self.after(0, self.render_grid)
+                        self.after(0, self.start_scan)
+            except Exception as e:
+                print(f"⚠️ Could not sync printers from Google Sheets: {str(e)}")
+                
+        threading.Thread(target=sync_thread, daemon=True).start()
+
+        # โหลดค่าจาก Cache ในเครื่องก่อนเป็นลำดับแรก (เพื่อให้แสดงผลได้ทันทีโดยไม่ต้องรอเน็ตเวิร์ก)
         printers_path = os.path.join(BASE_DIR, "data", "printers.json")
         try:
             if os.path.exists(printers_path):

@@ -94,6 +94,25 @@ def log_to_csv(timestamp_str, pid, location, zone, ptype, bw, color, method):
     except Exception as e:
         print(f"⚠️ Error writing to daily_counters.csv: {str(e)}")
 
+def sync_printers_from_gsheets():
+    if not GSHEETS_URL:
+        return
+    try:
+        url = f"{GSHEETS_URL}?action=all"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            res_body = response.read().decode('utf-8')
+            res_json = json.loads(res_body)
+            if res_json.get("success") and "printers" in res_json:
+                printers = res_json["printers"]
+                printers_path = os.path.join(BASE_DIR, "data", "printers.json")
+                os.makedirs(os.path.dirname(printers_path), exist_ok=True)
+                with open(printers_path, "w", encoding="utf-8") as f:
+                    json.dump({"printers": printers}, f, ensure_ascii=False, indent=2)
+                print("🔄 Successfully synced printer list from Google Sheets to local printers.json!")
+    except Exception as e:
+        print(f"⚠️ Could not sync printers from Google Sheets: {str(e)}. Using local cache.")
+
 def is_m_c251fwb(p):
     serial = str(p.get("serial", "")).upper()
     location = str(p.get("location", ""))
@@ -126,6 +145,9 @@ def run_daily_scheduler():
                     
                     daily_status["hours_scanned"].append(current_hour)
                     save_daily_status(daily_status)
+                    
+                    # ดึงข้อมูลเครื่องพิมพ์ล่าสุดจาก Google Sheets มาอัปเดตไฟล์ในเครื่อง
+                    sync_printers_from_gsheets()
                     
                     printers_path = os.path.join(BASE_DIR, "data", "printers.json")
                     if os.path.exists(printers_path):
@@ -318,6 +340,9 @@ class LocalServiceHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
             
     def handle_scan_realtime(self):
+        # ดึงข้อมูลเครื่องพิมพ์ล่าสุดจาก Google Sheets มาอัปเดตไฟล์ในเครื่อง
+        sync_printers_from_gsheets()
+        
         printers_path = os.path.join(BASE_DIR, "data", "printers.json")
         try:
             with open(printers_path, "r", encoding="utf-8") as f:
