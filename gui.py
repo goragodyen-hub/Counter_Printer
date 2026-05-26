@@ -428,6 +428,10 @@ class PrinterMonitorApp(tk.Tk):
         )
         self.scan_btn.grid(row=0, column=1, sticky="e")
         
+        # ─── สร้าง summary_frame ก่อน (จำเป็นต้องมีก่อน render_stats ซึ่งเรียก render_summary)
+        self.summary_frame = tk.Frame(self, bg="#0f172a", padx=20, pady=0)
+        self.summary_frame.grid(row=2, column=0, sticky="ew")
+
         # ─── FILTER & STATS BAR ───────────────────────────────────────────────
         filter_stats_frame = tk.Frame(self, bg=BG_MAIN, padx=20, pady=10)
         filter_stats_frame.grid(row=1, column=0, sticky="ew")
@@ -442,12 +446,8 @@ class PrinterMonitorApp(tk.Tk):
         # Quick Stats Frame
         self.stats_frame = tk.Frame(filter_stats_frame, bg=BG_MAIN)
         self.stats_frame.grid(row=0, column=1, sticky="e")
-        self.render_stats()
-
-        # ─── SUMMARY BAR (ยอดรวม BW + สี) ────────────────────────────────────
-        self.summary_frame = tk.Frame(self, bg="#0f172a", padx=20, pady=0)
-        self.summary_frame.grid(row=2, column=0, sticky="ew")
-        self.render_summary()
+        self.render_stats()   # render_stats → render_summary → ใช้ summary_frame (มีแล้ว)
+        self.render_summary() # เรียกครั้งแรกเผื่อ render_stats ไม่ได้เรียก
         
         # ─── SCROLLABLE CONTENT GRID ──────────────────────────────────────────
         grid_outer_frame = tk.Frame(self, bg=BG_MAIN)
