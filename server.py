@@ -94,6 +94,18 @@ def log_to_csv(timestamp_str, pid, location, zone, ptype, bw, color, method):
     except Exception as e:
         print(f"⚠️ Error writing to daily_counters.csv: {str(e)}")
 
+def is_m_c251fwb(p):
+    serial = str(p.get("serial", "")).upper()
+    location = str(p.get("location", ""))
+    return (
+        "58:38:79:65:B7:52" in serial or 
+        "58:38:79:65:68:FB" in serial or 
+        "5823P700770" in serial or 
+        "5823PA00137" in serial or
+        "เครื่องสีเล็ก" in location or
+        "M C251" in location
+    )
+
 def run_daily_scheduler():
     print("⏰ Daily Hourly Printer Scanner Scheduler Thread started successfully.")
     
@@ -145,17 +157,21 @@ def run_daily_scheduler():
                                 
                             online = ping_ip(ip)
                             if online:
-                                total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
-                                if total is None:
-                                    total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                                if is_m_c251fwb(p):
+                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
+                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
+                                else:
+                                    total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
+                                    if total is None:
+                                        total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                                        
+                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
+                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
                                     
-                                bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
-                                color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
-                                
-                                if bw is None and total is not None:
-                                    bw = total
-                                if color is None and ptype == "ขาวดำ":
-                                    color = 0
+                                    if bw is None and total is not None:
+                                        bw = total
+                                    if color is None and ptype == "ขาวดำ":
+                                        color = 0
                                     
                                 if bw is not None:
                                     with lock:
@@ -329,19 +345,23 @@ class LocalServiceHandler(http.server.SimpleHTTPRequestHandler):
                 continue
                 
             # Query SNMP counters
-            total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
-            if total is None:
-                total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+            if is_m_c251fwb(p):
+                bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
+                color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
+            else:
+                total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
+                if total is None:
+                    total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                    
+                bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
+                color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
                 
-            bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
-            color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
-            
-            if total is not None and bw is None:
-                if ptype == "ขาวดำ":
-                    bw = total
-                    color = 0
+                if total is not None and bw is None:
+                    if ptype == "ขาวดำ":
+                        bw = total
+                        color = 0
 
-            if total is not None or bw is not None or color is not None:
+            if bw is not None or color is not None:
                 results[pid] = {
                     "printerId": pid,
                     "counterBW": bw if bw is not None else 0,

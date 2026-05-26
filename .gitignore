@@ -16,3 +16,9 @@ __pycache__/
 # Local dynamic data
 data/daily_status.json
 data/daily_counters.csv
+
+# PyInstaller builds
+build/
+dist/
+*.spec
+

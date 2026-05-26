@@ -90,6 +90,18 @@ def log_to_csv(timestamp_str, pid, location, zone, ptype, bw, color, method):
     except Exception as e:
         print(f"⚠️ Error writing to daily_counters.csv: {str(e)}")
 
+def is_m_c251fwb(p):
+    serial = str(p.get("serial", "")).upper()
+    location = str(p.get("location", ""))
+    return (
+        "58:38:79:65:B7:52" in serial or 
+        "58:38:79:65:68:FB" in serial or 
+        "5823P700770" in serial or 
+        "5823PA00137" in serial or
+        "เครื่องสีเล็ก" in location or
+        "M C251" in location
+    )
+
 def run_daily_scheduler(app_instance=None):
     print("⏰ Daily Hourly Printer Scanner Scheduler Thread started successfully.")
     
@@ -141,17 +153,21 @@ def run_daily_scheduler(app_instance=None):
                                 
                             online = ping_ip(ip)
                             if online:
-                                total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
-                                if total is None:
-                                    total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                                if is_m_c251fwb(p):
+                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
+                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
+                                else:
+                                    total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
+                                    if total is None:
+                                        total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                                        
+                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
+                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
                                     
-                                bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
-                                color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
-                                
-                                if bw is None and total is not None:
-                                    bw = total
-                                if color is None and ptype == "ขาวดำ":
-                                    color = 0
+                                    if bw is None and total is not None:
+                                        bw = total
+                                    if color is None and ptype == "ขาวดำ":
+                                        color = 0
                                     
                                 if bw is not None:
                                     with lock:
@@ -740,28 +756,35 @@ class PrinterMonitorApp(tk.Tk):
             
             if online:
                 # Query SNMP
-                # Try standard printer MIB OID or Ricoh total OID for BW
-                total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
-                if total is None:
-                    total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                if is_m_c251fwb(p):
+                    bw_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
+                    color_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
                     
-                bw_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
-                color_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
-                
-                # Deduce BW counter
-                if bw_snmp is not None:
-                    bw = bw_snmp
-                elif total is not None:
-                    bw = total
+                    bw = bw_snmp if bw_snmp is not None else "—"
+                    color = color_snmp if color_snmp is not None else "—"
+                else:
+                    # Try standard printer MIB OID or Ricoh total OID for BW
+                    total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
+                    if total is None:
+                        total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                        
+                    bw_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
+                    color_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
                     
-                # Deduce Color counter
-                if color_snmp is not None:
-                    color = color_snmp
-                elif p_type == "ขาวดำ":
-                    color = 0
-                elif total is not None and bw_snmp is None:
-                    # In Ricoh sometimes total is returned but color isn't, so B/W could be total
-                    color = "—"
+                    # Deduce BW counter
+                    if bw_snmp is not None:
+                        bw = bw_snmp
+                    elif total is not None:
+                        bw = total
+                        
+                    # Deduce Color counter
+                    if color_snmp is not None:
+                        color = color_snmp
+                    elif p_type == "ขาวดำ":
+                        color = 0
+                    elif total is not None and bw_snmp is None:
+                        # In Ricoh sometimes total is returned but color isn't, so B/W could be total
+                        color = "—"
             
             with lock:
                 results[pid] = {
