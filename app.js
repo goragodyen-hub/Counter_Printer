@@ -147,6 +147,7 @@ async function loadDashboard() {
   const selMonthEl = document.getElementById('dash-month-select');
   const selMonth = selMonthEl.value || latestMonth();
   renderSummaryCards(selMonth);
+  renderZoneSummary(selMonth);
   renderZoneTabs();
   renderPrinterGrid(selMonth);
   renderCharts();
@@ -185,6 +186,107 @@ function renderSummaryCards(month) {
       <div class="card-label">ใช้ไปเดือนนี้ (สี)</div>
       <div class="card-value" style="color:#f59e0b">${totalUsedColor > 0 ? fmtNum(totalUsedColor) : '—'}</div>
       <div class="card-sub">แผ่น</div>
+    </div>
+  `;
+}
+
+// ─── Zone Summary Bar ────────────────────────────────────────────────────────
+function renderZoneSummary(month) {
+  const el = document.getElementById('zone-summary');
+  if (!el) return;
+
+  const monthStats = stats[month] || {};
+  const hasData = Object.keys(monthStats).length > 0;
+  if (!hasData) { el.innerHTML = ''; return; }
+
+  // คำนวณยอดรวมแต่ละโซน (usedBW/usedColor = ใช้ไปเดือนนี้, counterBW/counterColor = มิเตอร์สะสม)
+  const zoneTotals = {};
+  let grandUsedBW = 0, grandUsedColor = 0;
+  let grandCounterBW = 0, grandCounterColor = 0;
+
+  for (const p of printers) {
+    const st = monthStats[p.id];
+    if (!st || st.isBaseline) continue;
+    const zone = p.zone;
+    if (!zoneTotals[zone]) zoneTotals[zone] = { usedBW: 0, usedColor: 0, counterBW: 0, counterColor: 0, count: 0 };
+    zoneTotals[zone].usedBW    += st.usedBW    || 0;
+    zoneTotals[zone].usedColor += st.usedColor || 0;
+    zoneTotals[zone].counterBW    += st.counterBW    || 0;
+    zoneTotals[zone].counterColor += st.counterColor || 0;
+    zoneTotals[zone].count++;
+    grandUsedBW    += st.usedBW    || 0;
+    grandUsedColor += st.usedColor || 0;
+    grandCounterBW    += st.counterBW    || 0;
+    grandCounterColor += st.counterColor || 0;
+  }
+
+  const ZONE_ORDER = ['มัธยม', 'ประถม', 'อนุบาล', 'ห้องปฏิบัติการ'];
+  const ZONE_GRADIENT = {
+    'มัธยม':         'linear-gradient(135deg,rgba(124,58,237,0.18),rgba(124,58,237,0.06))',
+    'ประถม':         'linear-gradient(135deg,rgba(6,182,212,0.18),rgba(6,182,212,0.06))',
+    'อนุบาล':        'linear-gradient(135deg,rgba(16,185,129,0.18),rgba(16,185,129,0.06))',
+    'ห้องปฏิบัติการ': 'linear-gradient(135deg,rgba(245,158,11,0.18),rgba(245,158,11,0.06))',
+  };
+
+  const zoneCards = ZONE_ORDER.filter(z => zoneTotals[z]).map(zone => {
+    const zt = zoneTotals[zone];
+    const col = ZONE_COLORS[zone] || '#94a3b8';
+    const grad = ZONE_GRADIENT[zone] || 'none';
+    const hasUsed = zt.usedBW > 0 || zt.usedColor > 0;
+    return `
+      <div class="zscard" style="background:${grad};border:1px solid ${col}33;">
+        <div class="zscard-zone" style="color:${col}">${zone}</div>
+        <div class="zscard-sub">${zt.count} เครื่อง</div>
+        <div class="zscard-divider"></div>
+        <div class="zscard-row">
+          <span class="zscard-label">⬛ ใช้ไป</span>
+          <span class="zscard-val bw">${hasUsed ? fmtNum(zt.usedBW) : '—'}</span>
+        </div>
+        <div class="zscard-row">
+          <span class="zscard-label">🎨 สี ใช้ไป</span>
+          <span class="zscard-val color">${hasUsed ? fmtNum(zt.usedColor) : '—'}</span>
+        </div>
+        <div class="zscard-total-row">
+          <span class="zscard-label">รวมใช้ไป</span>
+          <span class="zscard-val total">${hasUsed ? fmtNum(zt.usedBW + zt.usedColor) : '—'}</span>
+        </div>
+        <div class="zscard-divider" style="margin-top:6px"></div>
+        <div class="zscard-row" style="opacity:0.65;margin-top:4px">
+          <span class="zscard-label" style="font-size:0.68rem">สะสมรวม</span>
+          <span class="zscard-val" style="font-size:0.75rem;color:#94a3b8">${fmtNum(zt.counterBW + zt.counterColor)}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  const grandHasUsed = grandUsedBW > 0 || grandUsedColor > 0;
+  el.innerHTML = `
+    <div class="zone-summary-wrap">
+      <div class="zone-summary-label">📊 สรุปยอดพิมพ์แยกตามแผนก — <span style="color:var(--accent-light)">${thMonth(month)}</span></div>
+      <div class="zone-summary-row">
+        ${zoneCards}
+        <div class="zscard zscard-grand">
+          <div class="zscard-zone" style="color:#c4b5fd">🏆 รวมทั้งหมด</div>
+          <div class="zscard-sub">ทุกแผนก</div>
+          <div class="zscard-divider"></div>
+          <div class="zscard-row">
+            <span class="zscard-label">⬛ BW รวม</span>
+            <span class="zscard-val bw" style="font-size:1rem">${grandHasUsed ? fmtNum(grandUsedBW) : '—'}</span>
+          </div>
+          <div class="zscard-row">
+            <span class="zscard-label">🎨 สี รวม</span>
+            <span class="zscard-val color" style="font-size:1rem">${grandHasUsed ? fmtNum(grandUsedColor) : '—'}</span>
+          </div>
+          <div class="zscard-total-row">
+            <span class="zscard-label">รวมทั้งหมด</span>
+            <span class="zscard-val" style="font-size:1.15rem;color:#a78bfa;font-weight:800">${grandHasUsed ? fmtNum(grandUsedBW + grandUsedColor) : '—'}</span>
+          </div>
+          <div class="zscard-divider" style="margin-top:6px"></div>
+          <div class="zscard-row" style="opacity:0.65;margin-top:4px">
+            <span class="zscard-label" style="font-size:0.68rem">สะสมรวมทั้งหมด</span>
+            <span class="zscard-val" style="font-size:0.75rem;color:#94a3b8">${fmtNum(grandCounterBW + grandCounterColor)}</span>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }

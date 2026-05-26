@@ -781,3 +781,95 @@ input, select, textarea { font-family: var(--font); }
   font-variant-numeric: tabular-nums;
 }
 
+/* ─── Zone Summary Bar ───────────────────────────────────────────────────────── */
+.zone-summary-wrap {
+  margin-bottom: 24px;
+  animation: fadeIn 0.4s ease;
+}
+.zone-summary-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.zone-summary-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Zone Card Base */
+.zscard {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  transition: transform var(--transition), box-shadow var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.zscard:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+
+.zscard-zone {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 1px;
+}
+.zscard-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.zscard-divider {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 8px;
+}
+.zscard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+.zscard-label { font-size: 0.72rem; color: var(--text-muted); }
+.zscard-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.zscard-val.bw    { color: #e2e8f0; }
+.zscard-val.color { color: #c084fc; }
+.zscard-val.total { color: #f8fafc; }
+
+.zscard-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Grand Total Card */
+.zscard-grand {
+  background: linear-gradient(135deg, rgba(109,40,217,0.25), rgba(124,58,237,0.1));
+  border-color: rgba(124,58,237,0.4) !important;
+  box-shadow: 0 0 20px rgba(124,58,237,0.12);
+  min-width: 160px;
+}
+.zscard-grand:hover { box-shadow: 0 0 32px rgba(124,58,237,0.22), var(--shadow); }
+
+@media (max-width: 768px) {
+  .zscard { min-width: 120px; padding: 12px; }
+  .zscard-val { font-size: 0.82rem; }
+}
+@media (max-width: 480px) {
+  .zscard { min-width: calc(50% - 5px); flex: none; }
+  .zscard-grand { min-width: 100%; flex: none; }
+}
+
