@@ -1514,7 +1514,11 @@ async function fetchRealtimeCounters() {
   
   showLoading(true);
   try {
-    const res = await fetch('/api/scan-realtime').then(r => r.json());
+    // ตรวจสอบว่าโฮสต์เป็น localhost หรือเป็นหน้าเว็บออนไลน์บน GitHub Pages
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiEndpoint = isLocal ? '/api/scan-realtime' : 'http://localhost:3000/api/scan-realtime';
+    
+    const res = await fetch(apiEndpoint).then(r => r.json());
     if (res && res.success) {
       const results = res.results || {};
       let count = 0;
