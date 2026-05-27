@@ -154,7 +154,6 @@ async function loadDashboard() {
   renderZoneSummary(selMonth);
   renderZoneTabs();
   renderPrinterGrid(selMonth);
-  renderCharts();
 }
 
 function latestMonth() {
@@ -164,7 +163,7 @@ function latestMonth() {
 function renderSummaryCards(month) {
   const monthStats = stats[month] || {};
   const totalPrinters = printers.length;
-  const recorded = Object.values(monthStats).filter(st => !st.isBaseline).length;
+  const recorded = Object.values(monthStats).length;
   
   const totalUsedBW = Object.values(monthStats).reduce((s, v) => s + (v.usedBW || 0), 0);
   const totalUsedColor = Object.values(monthStats).reduce((s, v) => s + (v.usedColor || 0), 0);
@@ -210,7 +209,7 @@ function renderZoneSummary(month) {
 
   for (const p of printers) {
     const st = monthStats[p.id];
-    if (!st || st.isBaseline) continue;
+    if (!st) continue;
     const zone = p.zone;
     if (!zoneTotals[zone]) zoneTotals[zone] = { usedBW: 0, usedColor: 0, counterBW: 0, counterColor: 0, count: 0 };
     zoneTotals[zone].usedBW    += st.usedBW    || 0;
@@ -377,94 +376,7 @@ function renderPrinterGrid(month) {
   }).join('');
 }
 
-function renderCharts() {
-  // กราฟสรุปยอดพิมพ์รวม 6 เดือนหลัง
-  const months6 = allMonths.slice(-6);
-  const totalBWByMonth = months6.map(m => {
-    return Object.values(stats[m] || {}).reduce((s, v) => s + (v.usedBW || 0), 0);
-  });
-  const totalColorByMonth = months6.map(m => {
-    return Object.values(stats[m] || {}).reduce((s, v) => s + (v.usedColor || 0), 0);
-  });
 
-  const ctx1 = document.getElementById('chart-monthly');
-  if (chartMonthly) chartMonthly.destroy();
-  chartMonthly = new Chart(ctx1, {
-    type: 'bar',
-    data: {
-      labels: months6.map(m => thMonth(m)),
-      datasets: [
-        {
-          label: 'ขาวดำ (แผ่น/เดือน)',
-          data: totalBWByMonth,
-          backgroundColor: 'rgba(100,100,100,0.6)',
-          borderColor: '#666',
-          borderWidth: 2,
-          borderRadius: 6,
-        },
-        {
-          label: 'สี (แผ่น/เดือน)',
-          data: totalColorByMonth,
-          backgroundColor: 'rgba(245,158,11,0.6)',
-          borderColor: '#f59e0b',
-          borderWidth: 2,
-          borderRadius: 6,
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'Noto Sans Thai' } } } },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Noto Sans Thai' } } },
-        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Noto Sans Thai' } } }
-      }
-    }
-  });
-
-  // กราฟเปรียบเทียบมิเตอร์สะสมแต่ละเครื่องในเดือนล่าสุด
-  const latM = latestMonth();
-  const latStats = stats[latM] || {};
-  const pList = printers.filter(p => latStats[p.id] && ((latStats[p.id].counterBW || 0) > 0 || (latStats[p.id].counterColor || 0) > 0));
-  pList.sort((a, b) => ((latStats[b.id].counterBW || 0) + (latStats[b.id].counterColor || 0)) - ((latStats[a.id].counterBW || 0) + (latStats[a.id].counterColor || 0)));
-  const top10 = pList.slice(0, 10);
-
-  const ctx2 = document.getElementById('chart-compare');
-  if (chartCompare) chartCompare.destroy();
-  chartCompare = new Chart(ctx2, {
-    type: 'bar',
-    data: {
-      labels: top10.map(p => p.location.replace(/\s*\(.*?\)\s*/g, ' ').trim()),
-      datasets: [{
-        label: 'ขาวดำ',
-        data: top10.map(p => latStats[p.id]?.counterBW || 0),
-        backgroundColor: 'rgba(100,100,100,0.7)',
-        borderColor: '#666',
-        borderWidth: 2,
-        borderRadius: 6,
-      },
-      {
-        label: 'สี',
-        data: top10.map(p => latStats[p.id]?.counterColor || 0),
-        backgroundColor: 'rgba(245,158,11,0.7)',
-        borderColor: '#f59e0b',
-        borderWidth: 2,
-        borderRadius: 6,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: 'y',
-      plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'Noto Sans Thai' } } } },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Noto Sans Thai' } } },
-        y: { grid: { color: 'transparent' }, ticks: { color: '#94a3b8', font: { family: 'Noto Sans Thai', size: 11 } } }
-      }
-    }
-  });
-}
 
 // ─── Record Page ──────────────────────────────────────────────────────────────
 function initRecordPage() {
@@ -532,8 +444,8 @@ async function loadRecordForm() {
 
         // ค่าในเดือนปัจจุบันที่บันทึกไปแล้ว (ถ้ามีและไม่ใช่ข้อมูลเริ่มต้น)
         const st = monthStats[p.id];
-        const currentBW = st && !st.isBaseline && st.counterBW !== undefined ? st.counterBW : '';
-        const currentColor = st && !st.isBaseline && st.counterColor !== undefined ? st.counterColor : '';
+        const currentBW = st && st.counterBW !== undefined ? st.counterBW : '';
+        const currentColor = st && st.counterColor !== undefined ? st.counterColor : '';
         const note = (st && st.note) ? st.note : '';
 
         const prevBW = prevBWVal !== '' ? Number(prevBWVal) : 0;

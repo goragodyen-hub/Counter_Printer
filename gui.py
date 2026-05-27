@@ -748,6 +748,7 @@ class PrinterMonitorApp(tk.Tk):
         try:
             if os.path.exists(printers_path):
                 with open(printers_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
                     printers_loaded = data.get("printers", [])
                     zone_order = ['มัธยม', 'ประถม', 'อนุบาล', 'ห้องปฏิบัติการ']
                     self.printers = sorted(printers_loaded, key=lambda p: zone_order.index(p.get("zone", "")) if p.get("zone", "") in zone_order else 999)
