@@ -350,7 +350,7 @@ function renderPrinterGrid(month) {
         </div>
         <div class="printer-location">${p.location}</div>
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; margin-top: 4px;">
-          <span style="font-size: 0.68rem; font-weight: 600; color: var(--cyan); background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">${getPrinterModel(p.serial, p.location)}</span>
+          <span style="font-size: 0.68rem; font-weight: 600; color: var(--cyan); background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">${p.model || getPrinterModel(p.serial, p.location)}</span>
         </div>
         <div class="printer-ip" style="margin-bottom: 10px">${p.ip || ''} ${p.serial ? '· ' + p.serial : ''}</div>
         <div class="printer-counter-row">
@@ -811,7 +811,7 @@ async function loadHistory() {
       rows.push({
         zone: p.zone,
         location: p.location,
-        model: getPrinterModel(p.serial, p.location),
+        model: p.model || getPrinterModel(p.serial, p.location),
         serial: p.serial || '—',
         val3,
         val2,
@@ -964,7 +964,7 @@ function exportCSV() {
     rows.push({
       zone: p.zone,
       location: p.location,
-      model: getPrinterModel(p.serial, p.location),
+      model: p.model || getPrinterModel(p.serial, p.location),
       serial: p.serial || '—',
       val3,
       val2,
@@ -1034,7 +1034,7 @@ async function loadSettings() {
               <td>${p.type === 'สี' ? '🎨 สี' : '⬛ ขาวดำ'}</td>
               <td class="ip-mono">${p.ip || ''}</td>
               <td>
-                <div style="font-weight:600">${getPrinterModel(p.serial, p.location)}</div>
+                <div style="font-weight:600">${p.model || getPrinterModel(p.serial, p.location)}</div>
                 <div class="serial-mono" style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${p.serial || '—'}</div>
               </td>
               <td style="font-size:0.78rem;color:var(--orange)">${p.note || ''}</td>
@@ -1065,6 +1065,7 @@ function openPrinterModal(id) {
   document.getElementById('modal-zone').value     = p?.zone     || 'มัธยม';
   document.getElementById('modal-type').value     = p?.type     || 'ขาวดำ';
   document.getElementById('modal-location').value = p?.location || '';
+  document.getElementById('modal-model').value    = p?.model    || '';
   document.getElementById('modal-ip').value       = p?.ip       || '';
   document.getElementById('modal-serial').value   = p?.serial   || '';
   document.getElementById('modal-note').value     = p?.note     || '';
@@ -1084,13 +1085,14 @@ async function savePrinter() {
   const zone = document.getElementById('modal-zone').value;
   const type = document.getElementById('modal-type').value;
   const location = document.getElementById('modal-location').value;
+  const model = document.getElementById('modal-model').value;
   const ip = document.getElementById('modal-ip').value;
   const serial = document.getElementById('modal-serial').value;
   const note = document.getElementById('modal-note').value;
 
   if (!location) return showToast('⚠️ กรุณาระบุสถานที่ตั้งของเครื่องพิมพ์', 'warning');
 
-  const printerData = { zone, type, location, ip, serial, note };
+  const printerData = { zone, type, location, ip, model, serial, note };
   const action = id ? 'updatePrinter' : 'addPrinter';
   if (id) printerData.id = id;
 

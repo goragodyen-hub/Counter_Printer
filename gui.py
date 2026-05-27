@@ -11,6 +11,10 @@ import time
 import datetime
 import urllib.request
 
+# Configure stdout to use UTF-8
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 # ─── Resolve Base Directory (PyInstaller Safe) ────────────────────────────────
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
@@ -153,21 +157,40 @@ def run_daily_scheduler(app_instance=None):
                                 
                             online = ping_ip(ip)
                             if online:
-                                if is_m_c251fwb(p):
-                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
-                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
-                                else:
+                                if ptype == "ขาวดำ":
                                     total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
                                     if total is None:
                                         total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
-                                        
-                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
-                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
+                                    bw = total
+                                    color = 0
+                                else:  # ptype == "สี"
+                                    # 1. Try standard Ricoh B&W and Color OIDs
+                                    bw = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
+                                    color = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
                                     
-                                    if bw is None and total is not None:
-                                        bw = total
-                                    if color is None and ptype == "ขาวดำ":
-                                        color = 0
+                                    # 2. Try alternative Ricoh B&W and Color OIDs
+                                    if bw is None or color is None:
+                                        bw_alt = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.22")
+                                        color_alt = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.21")
+                                        if bw_alt is not None:
+                                            bw = bw_alt
+                                        if color_alt is not None:
+                                            color = color_alt
+                                            
+                                    # 3. Fallback to Total Engine Counter if still missing
+                                    if bw is None or color is None:
+                                        total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
+                                        if total is None:
+                                            total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
+                                        
+                                        if total is not None:
+                                            if bw is not None:
+                                                color = total - bw
+                                            elif color is not None:
+                                                bw = total - color
+                                            else:
+                                                bw = total
+                                                color = 0
                                     
                                 if bw is not None:
                                     with lock:
@@ -836,6 +859,18 @@ class PrinterMonitorApp(tk.Tk):
         )
         loc_lbl.pack(anchor="w", pady=(0, 4))
         
+        # Model Name (if available)
+        model = p.get("model", "")
+        if model:
+            model_lbl = tk.Label(
+                card_frame,
+                text=model,
+                font=self.font_bold,
+                fg="#06b6d4",
+                bg=BG_CARD
+            )
+            model_lbl.pack(anchor="w", pady=(0, 2))
+            
         # Subtitle: IP and Serial
         sub_txt = f"{ip}  ·  {serial}" if serial else ip
         sub_lbl = tk.Label(
@@ -937,35 +972,43 @@ class PrinterMonitorApp(tk.Tk):
             
             if online:
                 # Query SNMP
-                if is_m_c251fwb(p):
-                    bw_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
-                    color_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
-                    
-                    bw = bw_snmp if bw_snmp is not None else "—"
-                    color = color_snmp if color_snmp is not None else "—"
-                else:
-                    # Try standard printer MIB OID or Ricoh total OID for BW
+                if p_type == "ขาวดำ":
                     total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
                     if total is None:
                         total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
-                        
-                    bw_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.2.0")
-                    color_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.4.0")
+                    bw = total if total is not None else "—"
+                    color = 0
+                else:  # p_type == "สี"
+                    # 1. Try standard Ricoh B&W and Color OIDs
+                    bw_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.3")
+                    color_snmp = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.4")
                     
-                    # Deduce BW counter
-                    if bw_snmp is not None:
-                        bw = bw_snmp
-                    elif total is not None:
-                        bw = total
+                    # 2. Try alternative Ricoh B&W and Color OIDs
+                    if bw_snmp is None or color_snmp is None:
+                        bw_alt = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.22")
+                        color_alt = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.21")
+                        if bw_alt is not None:
+                            bw_snmp = bw_alt
+                        if color_alt is not None:
+                            color_snmp = color_alt
+                            
+                    # 3. Fallback to Total if one or both are still missing
+                    if bw_snmp is None or color_snmp is None:
+                        total = query_printer_counter(ip, "1.3.6.1.2.1.43.10.2.1.4.1.1")
+                        if total is None:
+                            total = query_printer_counter(ip, "1.3.6.1.4.1.367.3.2.1.2.19.1.0")
                         
-                    # Deduce Color counter
-                    if color_snmp is not None:
-                        color = color_snmp
-                    elif p_type == "ขาวดำ":
-                        color = 0
-                    elif total is not None and bw_snmp is None:
-                        # In Ricoh sometimes total is returned but color isn't, so B/W could be total
-                        color = "—"
+                        if total is not None:
+                            if bw_snmp is not None:
+                                color_snmp = total - bw_snmp
+                            elif color_snmp is not None:
+                                bw_snmp = total - color_snmp
+                            else:
+                                bw_snmp = total
+                                color_snmp = 0
+                                
+                    bw = bw_snmp if bw_snmp is not None else "—"
+                    color = color_snmp if color_snmp is not None else "—"
             
             with lock:
                 results[pid] = {

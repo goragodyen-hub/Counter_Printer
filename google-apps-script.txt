@@ -15,7 +15,7 @@
 var SHEET_PRINTERS = 'Printers';
 var SHEET_RECORDS  = 'Records';
 
-var PRINTER_HEADERS = ['id', 'zone', 'location', 'ip', 'serial', 'type', 'note'];
+var PRINTER_HEADERS = ['id', 'zone', 'location', 'ip', 'model', 'serial', 'type', 'note'];
 var RECORD_HEADERS  = ['id', 'printerId', 'month', 'counterBW', 'counterColor', 'recordedAt', 'note'];
 
 // ─── GET API: ดึงข้อมูล ────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ function doPost(e) {
           month: month,
           counterBW: entry.counterBW !== undefined ? Number(entry.counterBW) : 0,
           counterColor: entry.counterColor !== undefined ? Number(entry.counterColor) : 0,
-          recordedAt: new Date().toISOString(),
+          recordedAt: new Date(),
           note: entry.note || ''
         };
         appendRow(sheet, RECORD_HEADERS, record);
@@ -158,7 +158,7 @@ function doPost(e) {
             month: r.month,
             counterBW: r.counterBW !== undefined ? Number(r.counterBW) : (r.counter ? Number(r.counter) : 0),
             counterColor: r.counterColor !== undefined ? Number(r.counterColor) : 0,
-            recordedAt: r.recordedAt || new Date().toISOString(),
+            recordedAt: r.recordedAt || new Date(),
             note: r.note || ''
           };
         });
@@ -318,6 +318,22 @@ function getOrCreateSheet(ss, sheetName, headers) {
     headerRange.setFontColor('#ffffff');
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
+  } else {
+    // ตรวจสอบคอลัมน์ที่ขาดหายไปและเพิ่มโดยอัตโนมัติ
+    var lastCol = sheet.getLastColumn();
+    var existingHeaders = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+    
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
+      if (existingHeaders.indexOf(h) === -1) {
+        var newColIdx = sheet.getLastColumn() + 1;
+        var cell = sheet.getRange(1, newColIdx);
+        cell.setValue(h);
+        cell.setBackground('#1e1b4b');
+        cell.setFontColor('#ffffff');
+        cell.setFontWeight('bold');
+      }
+    }
   }
   return sheet;
 }
