@@ -828,15 +828,31 @@ function exportPDF() {
       .diff-positive { color: #10b981; }
       .diff-negative { color: #ef4444; }
       .diff-zero { color: #555; }
+      @media print {
+        .no-print { display: none !important; }
+      }
     </style>
     </head><body>
+    <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; background: #1e1b4b; color: white; padding: 12px 16px; margin-bottom: 20px; border-radius: 8px; font-family: 'Noto Sans Thai', sans-serif; gap: 10px; flex-wrap: wrap;">
+      <span style="font-weight: 600; font-size: 0.95rem;">📄 หน้าแสดงตัวอย่างรายงานสำหรับพิมพ์</span>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button onclick="window.print()" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: 'Noto Sans Thai', sans-serif;">🖨️ สั่งพิมพ์ / บันทึก PDF</button>
+        <button onclick="window.close(); setTimeout(() => { window.location.href = window.location.origin + window.location.pathname; }, 300);" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: 'Noto Sans Thai', sans-serif;">❌ ปิด / ย้อนกลับ</button>
+      </div>
+    </div>
     <h1>🖨️ ${title}</h1>
     <div class="sub">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</div>
     ${tableEl.outerHTML}
     </body></html>
   `);
   printWin.document.close();
-  printWin.onload = () => { printWin.print(); };
+  // หลีกเลี่ยงการสั่งพิมพ์อัตโนมัติบนอุปกรณ์มือถือเพื่อให้ผู้ใช้กดปุ่มได้
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  printWin.onload = () => { 
+    if (!isMobile) {
+      printWin.print(); 
+    }
+  };
 }
 
 // Export CSV (Excel)
