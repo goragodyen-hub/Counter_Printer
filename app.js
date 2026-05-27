@@ -44,7 +44,11 @@ async function fetchAll() {
   try {
     const res = await fetch(`${gsheetsUrl}?action=all`).then(r => r.json());
     if (res && res.success) {
-      printers = res.printers || [];
+      printers = (res.printers || []).sort((a, b) => {
+        const valA = ZONES.indexOf(a.zone) === -1 ? 999 : ZONES.indexOf(a.zone);
+        const valB = ZONES.indexOf(b.zone) === -1 ? 999 : ZONES.indexOf(b.zone);
+        return valA - valB;
+      });
       records = (res.records || []).map(r => {
         // ปรับจูน timezone จาก ISO เป็น YYYY-MM ในเขตนครกรุงเทพฯ (GMT+7) เพื่อให้ตรงกับใน Google Sheet เสมอ
         if (r.month && r.month.includes('T')) {

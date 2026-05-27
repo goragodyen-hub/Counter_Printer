@@ -731,7 +731,8 @@ class PrinterMonitorApp(tk.Tk):
                             json.dump({"printers": printers}, f, ensure_ascii=False, indent=2)
                         
                         # อัปเดตรายชื่อเครื่องพิมพ์ใน GUI
-                        self.printers = printers
+                        zone_order = ['มัธยม', 'ประถม', 'อนุบาล', 'ห้องปฏิบัติการ']
+                        self.printers = sorted(printers, key=lambda p: zone_order.index(p.get("zone", "")) if p.get("zone", "") in zone_order else 999)
                         
                         # เริ่มสแกนเรียลไทม์ใหม่เพื่อให้แสดงผลเครื่องที่เพิ่มเข้ามา
                         self.after(0, self.render_stats)
@@ -747,8 +748,9 @@ class PrinterMonitorApp(tk.Tk):
         try:
             if os.path.exists(printers_path):
                 with open(printers_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self.printers = data.get("printers", [])
+                    printers_loaded = data.get("printers", [])
+                    zone_order = ['มัธยม', 'ประถม', 'อนุบาล', 'ห้องปฏิบัติการ']
+                    self.printers = sorted(printers_loaded, key=lambda p: zone_order.index(p.get("zone", "")) if p.get("zone", "") in zone_order else 999)
             else:
                 messagebox.showerror("Error", f"ไม่สามารถหาไฟล์ printers.json ในโฟลเดอร์ {printers_path} ได้")
         except Exception as e:
