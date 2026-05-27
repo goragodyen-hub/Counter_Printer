@@ -126,10 +126,9 @@ def is_m_c251fwb(p):
     )
 
 def run_daily_scheduler():
-    print("⏰ Daily Hourly Printer Scanner Scheduler Thread started successfully.")
-    
-    while True:
-        try:
+    # TEMPORARY DISABLED due to counter total issues
+    print("⏰ Daily Hourly Printer Scanner Scheduler is TEMPORARILY DISABLED.")
+    return
             now = datetime.datetime.now()
             current_hour = now.hour
             
