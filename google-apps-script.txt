@@ -16,7 +16,7 @@ var SHEET_PRINTERS = 'Printers';
 var SHEET_RECORDS  = 'Records';
 
 var PRINTER_HEADERS = ['id', 'zone', 'location', 'ip', 'model', 'serial', 'type', 'note'];
-var RECORD_HEADERS  = ['id', 'printerId', 'month', 'counterBW', 'counterColor', 'recordedAt', 'note'];
+var RECORD_HEADERS  = ['id', 'printerId', 'month', 'counter', 'recordedAt', 'note'];
 
 // ─── GET API: ดึงข้อมูล ────────────────────────────────────────────────────────────
 // ?action=all (default)  → ดึงข้อมูลทั้งหมด { printers: [...], records: [...] }
@@ -35,8 +35,7 @@ function doGet(e) {
       var records = readSheet(ss, SHEET_RECORDS, RECORD_HEADERS);
       // แปลงค่ามิเตอร์ให้เป็นตัวเลข
       result.records = records.map(function(r) {
-        r.counterBW = r.counterBW ? Number(r.counterBW) : 0;
-        r.counterColor = r.counterColor ? Number(r.counterColor) : 0;
+        r.counter = r.counter ? Number(r.counter) : 0;
         return r;
       });
     }
@@ -97,7 +96,7 @@ function doPost(e) {
     } else if (action === 'saveRecords') {
       // บันทึกมิเตอร์แบบกลุ่ม (Batch) ของเดือนนั้นๆ
       var month = payload.month;
-      var entries = payload.entries; // Array ของ { printerId, counterBW, counterColor, note }
+      var entries = payload.entries; // Array ของ { printerId, counter, note }
       
       if (!month) throw new Error('Month is required');
       if (!entries || !Array.isArray(entries)) throw new Error('Entries array is required');
@@ -132,8 +131,7 @@ function doPost(e) {
           id: 'R-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000),
           printerId: entry.printerId,
           month: month,
-          counterBW: entry.counterBW !== undefined ? Number(entry.counterBW) : 0,
-          counterColor: entry.counterColor !== undefined ? Number(entry.counterColor) : 0,
+          counter: entry.counter !== undefined ? Number(entry.counter) : (entry.counterBW !== undefined ? Number(entry.counterBW) : 0),
           recordedAt: new Date(),
           note: entry.note || ''
         };
@@ -156,8 +154,7 @@ function doPost(e) {
             id: r.id || ('R-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000)),
             printerId: r.printerId,
             month: r.month,
-            counterBW: r.counterBW !== undefined ? Number(r.counterBW) : (r.counter ? Number(r.counter) : 0),
-            counterColor: r.counterColor !== undefined ? Number(r.counterColor) : 0,
+            counter: r.counter !== undefined ? Number(r.counter) : (r.counterBW !== undefined ? Number(r.counterBW) : 0),
             recordedAt: r.recordedAt || new Date(),
             note: r.note || ''
           };
@@ -344,13 +341,9 @@ function getOrCreateSheet(ss, sheetName, headers) {
 function formatNumbers(sheet, sheetName, headers, numRows, startRow) {
   var sRow = startRow || 2;
   if (sheetName === SHEET_RECORDS && numRows > 0) {
-    var bwCol = headers.indexOf('counterBW') + 1;
-    var colCol = headers.indexOf('counterColor') + 1;
-    if (bwCol > 0) {
-      sheet.getRange(sRow, bwCol, numRows, 1).setNumberFormat('#,##0');
-    }
-    if (colCol > 0) {
-      sheet.getRange(sRow, colCol, numRows, 1).setNumberFormat('#,##0');
+    var counterCol = headers.indexOf('counter') + 1;
+    if (counterCol > 0) {
+      sheet.getRange(sRow, counterCol, numRows, 1).setNumberFormat('#,##0');
     }
   }
 }

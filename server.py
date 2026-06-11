@@ -129,6 +129,10 @@ def run_daily_scheduler():
     # TEMPORARY DISABLED due to counter total issues
     print("⏰ Daily Hourly Printer Scanner Scheduler is TEMPORARILY DISABLED.")
     return
+
+    # Keep structural try/except blocks to avoid IndentationError
+    while True:
+        try:
             now = datetime.datetime.now()
             current_hour = now.hour
             
@@ -240,8 +244,7 @@ def run_daily_scheduler():
                                 
                                 newly_scanned_entries.append({
                                     "printerId": pid,
-                                    "counterBW": bw,
-                                    "counterColor": color,
+                                    "counter": (bw if bw is not None else 0) + (color if color is not None else 0),
                                     "note": f"Auto Scan ({current_hour:02d}:00)"
                                 })
                                 
@@ -426,6 +429,7 @@ class LocalServiceHandler(http.server.SimpleHTTPRequestHandler):
             if bw is not None or color is not None:
                 results[pid] = {
                     "printerId": pid,
+                    "counter": (bw if bw is not None else 0) + (color if color is not None else 0),
                     "counterBW": bw if bw is not None else 0,
                     "counterColor": color if color is not None else 0,
                     "success": True

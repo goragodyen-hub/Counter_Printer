@@ -50,6 +50,7 @@ async function fetchAll() {
         return valA - valB;
       });
       records = (res.records || []).map(r => {
+        r.counter = r.counter !== undefined ? Number(r.counter) : (r.counterBW !== undefined ? Number(r.counterBW) : 0);
         // ปรับจูน timezone จาก ISO เป็น YYYY-MM ในเขตนครกรุงเทพฯ (GMT+7) เพื่อให้ตรงกับใน Google Sheet เสมอ
         if (r.month && r.month.includes('T')) {
           const d = new Date(r.month);
@@ -91,8 +92,7 @@ function computeStats() {
       
       const isBaseline = rec.note && (rec.note.includes('ข้อมูลเริ่มต้น') || rec.note.includes('สรุปจำนวนมิเตอร์เครื่องพิมพ์'));
       
-      let usedBW = null;
-      let usedColor = null;
+      let used = null;
       
       // ค้นหาข้อมูลเดือนล่าสุดก่อนหน้า (รองรับการข้ามเดือนหรือข้อมูลไม่ต่อเนื่อง)
       if (monthIdx > 0 && !isBaseline) {
@@ -104,19 +104,16 @@ function computeStats() {
         }
         
         if (prevRec) {
-          usedBW = rec.counterBW - prevRec.counterBW;
-          usedColor = rec.counterColor - prevRec.counterColor;
+          used = (rec.counter !== undefined ? rec.counter : (rec.counterBW || 0)) - 
+                 (prevRec.counter !== undefined ? prevRec.counter : (prevRec.counterBW || 0));
         }
       }
       
-      const counterBW = rec.counterBW !== undefined ? rec.counterBW : 0;
-      const counterColor = rec.counterColor !== undefined ? rec.counterColor : 0;
+      const counter = rec.counter !== undefined ? rec.counter : (rec.counterBW !== undefined ? rec.counterBW : 0);
       
       stats[month][printer.id] = {
-        counterBW,
-        counterColor,
-        usedBW,
-        usedColor,
+        counter,
+        used,
         recordedAt: rec.recordedAt,
         note: rec.note || '',
         isBaseline: !!isBaseline
@@ -165,8 +162,8 @@ function renderSummaryCards(month) {
   const totalPrinters = printers.length;
   const recorded = Object.values(monthStats).length;
   
-  const totalUsedBW = Object.values(monthStats).reduce((s, v) => s + (v.usedBW || 0), 0);
-  const totalUsedColor = Object.values(monthStats).reduce((s, v) => s + (v.usedColor || 0), 0);
+  const totalUsed = Object.values(monthStats).reduce((s, v) => s + (v.used || 0), 0);
+  const totalCounter = Object.values(monthStats).reduce((s, v) => s + (v.counter || 0), 0);
 
   const el = document.getElementById('summary-cards');
   el.innerHTML = `
@@ -181,13 +178,13 @@ function renderSummaryCards(month) {
       <div class="card-sub">จาก ${totalPrinters} เครื่อง</div>
     </div>
     <div class="summary-card green" onclick="showOverallDetail()" style="cursor:pointer">
-      <div class="card-label">ใช้ไปเดือนนี้ (B&W)</div>
-      <div class="card-value" style="color:#10b981">${totalUsedBW > 0 ? fmtNum(totalUsedBW) : '—'}</div>
+      <div class="card-label">ยอดใช้ไปรวมเดือนนี้</div>
+      <div class="card-value" style="color:#10b981">${totalUsed > 0 ? fmtNum(totalUsed) : '—'}</div>
       <div class="card-sub">แผ่น</div>
     </div>
     <div class="summary-card orange" onclick="showOverallDetail()" style="cursor:pointer">
-      <div class="card-label">ใช้ไปเดือนนี้ (สี)</div>
-      <div class="card-value" style="color:#f59e0b">${totalUsedColor > 0 ? fmtNum(totalUsedColor) : '—'}</div>
+      <div class="card-label">มิเตอร์สะสมรวมทั้งหมด</div>
+      <div class="card-value" style="color:#f59e0b">${totalCounter > 0 ? fmtNum(totalCounter) : '—'}</div>
       <div class="card-sub">แผ่น</div>
     </div>
   `;
@@ -202,25 +199,21 @@ function renderZoneSummary(month) {
   const hasData = Object.keys(monthStats).length > 0;
   if (!hasData) { el.innerHTML = ''; return; }
 
-  // คำนวณยอดรวมแต่ละโซน (usedBW/usedColor = ใช้ไปเดือนนี้, counterBW/counterColor = มิเตอร์สะสม)
+  // คำนวณยอดรวมแต่ละโซน (used = ใช้ไปเดือนนี้, counter = มิเตอร์สะสม)
   const zoneTotals = {};
-  let grandUsedBW = 0, grandUsedColor = 0;
-  let grandCounterBW = 0, grandCounterColor = 0;
+  let grandUsed = 0;
+  let grandCounter = 0;
 
   for (const p of printers) {
     const st = monthStats[p.id];
     if (!st) continue;
     const zone = p.zone;
-    if (!zoneTotals[zone]) zoneTotals[zone] = { usedBW: 0, usedColor: 0, counterBW: 0, counterColor: 0, count: 0 };
-    zoneTotals[zone].usedBW    += st.usedBW    || 0;
-    zoneTotals[zone].usedColor += st.usedColor || 0;
-    zoneTotals[zone].counterBW    += st.counterBW    || 0;
-    zoneTotals[zone].counterColor += st.counterColor || 0;
+    if (!zoneTotals[zone]) zoneTotals[zone] = { used: 0, counter: 0, count: 0 };
+    zoneTotals[zone].used    += st.used    || 0;
+    zoneTotals[zone].counter += st.counter || 0;
     zoneTotals[zone].count++;
-    grandUsedBW    += st.usedBW    || 0;
-    grandUsedColor += st.usedColor || 0;
-    grandCounterBW    += st.counterBW    || 0;
-    grandCounterColor += st.counterColor || 0;
+    grandUsed    += st.used    || 0;
+    grandCounter += st.counter || 0;
   }
 
   const ZONE_ORDER = ['มัธยม', 'ประถม', 'อนุบาล', 'ห้องปฏิบัติการ'];
@@ -235,33 +228,25 @@ function renderZoneSummary(month) {
     const zt = zoneTotals[zone];
     const col = ZONE_COLORS[zone] || '#94a3b8';
     const grad = ZONE_GRADIENT[zone] || 'none';
-    const hasUsed = zt.usedBW > 0 || zt.usedColor > 0;
+    const hasUsed = zt.used > 0;
     return `
       <div class="zscard" style="background:${grad};border:1px solid ${col}33;">
         <div class="zscard-zone" style="color:${col}">${zone}</div>
         <div class="zscard-sub">${zt.count} เครื่อง</div>
         <div class="zscard-divider"></div>
-        <div class="zscard-row">
-          <span class="zscard-label">⬛ ใช้ไป</span>
-          <span class="zscard-val bw">${hasUsed ? fmtNum(zt.usedBW) : '—'}</span>
-        </div>
-        <div class="zscard-row">
-          <span class="zscard-label">🎨 สี ใช้ไป</span>
-          <span class="zscard-val color">${hasUsed ? fmtNum(zt.usedColor) : '—'}</span>
-        </div>
-        <div class="zscard-total-row">
-          <span class="zscard-label">รวมใช้ไป</span>
-          <span class="zscard-val total">${hasUsed ? fmtNum(zt.usedBW + zt.usedColor) : '—'}</span>
+        <div class="zscard-total-row" style="margin-top:12px;">
+          <span class="zscard-label" style="font-size:0.85rem">ใช้ไปรวม</span>
+          <span class="zscard-val total" style="color:#f8fafc;font-size:1.1rem;font-weight:700;">${hasUsed ? fmtNum(zt.used) : '—'}</span>
         </div>
         <div class="zscard-divider" style="margin-top:6px"></div>
         <div class="zscard-row" style="opacity:0.65;margin-top:4px">
           <span class="zscard-label" style="font-size:0.68rem">สะสมรวม</span>
-          <span class="zscard-val" style="font-size:0.75rem;color:#94a3b8">${fmtNum(zt.counterBW + zt.counterColor)}</span>
+          <span class="zscard-val" style="font-size:0.75rem;color:#94a3b8">${fmtNum(zt.counter)}</span>
         </div>
       </div>`;
   }).join('');
 
-  const grandHasUsed = grandUsedBW > 0 || grandUsedColor > 0;
+  const grandHasUsed = grandUsed > 0;
   el.innerHTML = `
     <div class="zone-summary-wrap">
       <div class="zone-summary-label">📊 สรุปยอดพิมพ์แยกตามแผนก — <span style="color:var(--accent-light)">${thMonth(month)}</span></div>
@@ -271,22 +256,14 @@ function renderZoneSummary(month) {
           <div class="zscard-zone" style="color:#c4b5fd">🏆 รวมทั้งหมด</div>
           <div class="zscard-sub">ทุกแผนก</div>
           <div class="zscard-divider"></div>
-          <div class="zscard-row">
-            <span class="zscard-label">⬛ BW รวม</span>
-            <span class="zscard-val bw" style="font-size:1rem">${grandHasUsed ? fmtNum(grandUsedBW) : '—'}</span>
-          </div>
-          <div class="zscard-row">
-            <span class="zscard-label">🎨 สี รวม</span>
-            <span class="zscard-val color" style="font-size:1rem">${grandHasUsed ? fmtNum(grandUsedColor) : '—'}</span>
-          </div>
-          <div class="zscard-total-row">
-            <span class="zscard-label">รวมทั้งหมด</span>
-            <span class="zscard-val" style="font-size:1.15rem;color:#a78bfa;font-weight:800">${grandHasUsed ? fmtNum(grandUsedBW + grandUsedColor) : '—'}</span>
+          <div class="zscard-total-row" style="margin-top:12px;">
+            <span class="zscard-label" style="font-size:0.95rem">ใช้ไปรวมทั้งหมด</span>
+            <span class="zscard-val" style="font-size:1.25rem;color:#a78bfa;font-weight:800">${grandHasUsed ? fmtNum(grandUsed) : '—'}</span>
           </div>
           <div class="zscard-divider" style="margin-top:6px"></div>
           <div class="zscard-row" style="opacity:0.65;margin-top:4px">
             <span class="zscard-label" style="font-size:0.68rem">สะสมรวมทั้งหมด</span>
-            <span class="zscard-val" style="font-size:0.75rem;color:#94a3b8">${fmtNum(grandCounterBW + grandCounterColor)}</span>
+            <span class="zscard-val" style="font-size:0.75rem;color:#94a3b8">${fmtNum(grandCounter)}</span>
           </div>
         </div>
       </div>
@@ -324,24 +301,17 @@ function renderPrinterGrid(month) {
 
   el.innerHTML = filtered.map(p => {
     const st = monthStats[p.id];
-    const counterBW = st ? st.counterBW : null;
-    const counterColor = st ? st.counterColor : null;
-    const usedBW = st ? st.usedBW : null;
-    const usedColor = st ? st.usedColor : null;
+    const counter = st ? st.counter : null;
+    const used = st ? st.used : null;
     
     const typeBadge = p.type === 'สี'
       ? `<span class="printer-type-badge badge-color">🎨 สี</span>`
       : `<span class="printer-type-badge badge-bw">⬛ ขาวดำ</span>`;
 
-    let usedBWHtml = '';
-    if (usedBW === null || usedBW === undefined) usedBWHtml = `<span class="used-badge none">— ไม่มีข้อมูลเดิม</span>`;
-    else if (usedBW < 0) usedBWHtml = `<span class="used-badge err">⚠️ ${fmtNum(usedBW)}</span>`;
-    else usedBWHtml = `<span class="used-badge up">▲ ${fmtNum(usedBW)} แผ่น</span>`;
-
-    let usedColorHtml = '';
-    if (usedColor === null || usedColor === undefined) usedColorHtml = `<span class="used-badge none">— ไม่มีข้อมูลเดิม</span>`;
-    else if (usedColor < 0) usedColorHtml = `<span class="used-badge err">⚠️ ${fmtNum(usedColor)}</span>`;
-    else usedColorHtml = `<span class="used-badge up" style="color:#f59e0b">▲ ${fmtNum(usedColor)} แผ่น</span>`;
+    let usedHtml = '';
+    if (used === null || used === undefined) usedHtml = `<span class="used-badge none">— ไม่มีข้อมูลเดิม</span>`;
+    else if (used < 0) usedHtml = `<span class="used-badge err">⚠️ ${fmtNum(used)}</span>`;
+    else usedHtml = `<span class="used-badge up">▲ ${fmtNum(used)} แผ่น</span>`;
 
     const noteHtml = p.note ? `<div class="printer-note-text">⚠️ ${p.note}</div>` : '';
 
@@ -358,17 +328,10 @@ function renderPrinterGrid(month) {
         <div class="printer-ip" style="margin-bottom: 10px">${p.ip || ''} ${p.serial ? '· ' + p.serial : ''}</div>
         <div class="printer-counter-row">
           <div>
-            <div class="counter-label">⬛ ขาวดำ ล่าสุด</div>
-            <div class="counter-value">${counterBW !== null ? fmtNum(counterBW) : '—'}</div>
+            <div class="counter-label">มิเตอร์สะสมล่าสุด</div>
+            <div class="counter-value">${counter !== null ? fmtNum(counter) : '—'}</div>
           </div>
-          ${usedBWHtml}
-        </div>
-        <div class="printer-counter-row" style="margin-top:8px">
-          <div>
-            <div class="counter-label">🎨 สี ล่าสุด</div>
-            <div class="counter-value" style="color:#f59e0b">${counterColor !== null ? fmtNum(counterColor) : '—'}</div>
-          </div>
-          ${usedColorHtml}
+          ${usedHtml}
         </div>
         ${noteHtml}
       </div>
@@ -398,10 +361,8 @@ async function loadRecordForm() {
       <thead><tr>
         <th>ห้อง / สถานที่</th>
         <th>IP / Serial</th>
-        <th>⬛ ขาวดำ</th>
-        <th>🎨 สี</th>
-        <th style="text-align:right;">📊 รวมของเก่า</th>
-        <th style="text-align:right;">📊 รวมของใหม่</th>
+        <th>🔢 มิเตอร์ปัจจุบัน</th>
+        <th style="text-align:right;">📊 มิเตอร์เดิม</th>
         <th style="text-align:right;">📈 ยอดใช้ไป</th>
         <th>หมายเหตุ</th>
       </tr></thead>
@@ -409,11 +370,10 @@ async function loadRecordForm() {
 
     for (const zone of zones) {
       const zPrinters = printers.filter(p => p.zone === zone);
-      html += `<tr class="zone-group-row"><td colspan="8">▪ ${zone}</td></tr>`;
+      html += `<tr class="zone-group-row"><td colspan="6">▪ ${zone}</td></tr>`;
       for (const p of zPrinters) {
         // ค้นหาข้อมูลมิเตอร์ล่าสุดของเดือนก่อนหน้า (เพื่อเอามาตั้งต้นเป็น มิเตอร์เดิม)
-        let prevBWVal = '';
-        let prevColorVal = '';
+        let prevVal = '';
 
         // ดึงจากประวัติตรงๆ
         const sortedMonths = [...allMonths].sort();
@@ -438,19 +398,15 @@ async function loadRecordForm() {
         }
 
         if (prevRec) {
-          prevBWVal = prevRec.counterBW !== undefined ? prevRec.counterBW : 0;
-          prevColorVal = prevRec.counterColor !== undefined ? prevRec.counterColor : 0;
+          prevVal = prevRec.counter !== undefined ? prevRec.counter : (prevRec.counterBW || 0);
         }
 
         // ค่าในเดือนปัจจุบันที่บันทึกไปแล้ว (ถ้ามีและไม่ใช่ข้อมูลเริ่มต้น)
         const st = monthStats[p.id];
-        const currentBW = st && st.counterBW !== undefined ? st.counterBW : '';
-        const currentColor = st && st.counterColor !== undefined ? st.counterColor : '';
+        const currentVal = st && st.counter !== undefined ? st.counter : '';
         const note = (st && st.note) ? st.note : '';
 
-        const prevBW = prevBWVal !== '' ? Number(prevBWVal) : 0;
-        const prevColor = prevColorVal !== '' ? Number(prevColorVal) : 0;
-        const prevTotal = prevBW + prevColor;
+        const prevCounter = prevVal !== '' ? Number(prevVal) : 0;
 
         html += `
           <tr>
@@ -464,36 +420,18 @@ async function loadRecordForm() {
             </td>
             <td>
               <input type="number" class="counter-input"
-                id="ci-bw-${p.id}"
+                id="ci-counter-${p.id}"
                 data-printer-id="${p.id}"
-                data-counter-type="bw"
-                data-prev="${prevBWVal}"
-                value="${currentBW}"
+                data-prev="${prevVal}"
+                value="${currentVal}"
                 min="0"
                 placeholder="กรอก Counter"
                 oninput="updateDiff('${p.id}')"
               />
-              <div class="prev-hint">เดิม: ${prevBWVal !== '' ? fmtNum(prevBWVal) : '—'}</div>
+              <div class="prev-hint">เดิม: ${prevVal !== '' ? fmtNum(prevVal) : '—'}</div>
             </td>
-            <td>
-              <input type="number" class="counter-input"
-                id="ci-color-${p.id}"
-                data-printer-id="${p.id}"
-                data-counter-type="color"
-                data-prev="${prevColorVal}"
-                value="${currentColor}"
-                min="0"
-                placeholder="กรอก Counter"
-                oninput="updateDiff('${p.id}')"
-                ${p.type === 'ขาวดำ' ? 'disabled style="background:rgba(255,255,255,0.02);cursor:not-allowed;"' : ''}
-              />
-              <div class="prev-hint" style="${p.type === 'ขาวดำ' ? 'color:transparent;user-select:none;pointer-events:none;' : ''}">เดิม: ${prevColorVal !== '' ? fmtNum(prevColorVal) : '—'}</div>
-            </td>
-            <td style="text-align:right;color:var(--text-secondary);font-variant-numeric:tabular-nums;" id="prev-total-${p.id}">
-              ${fmtNum(prevTotal)}
-            </td>
-            <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-primary);" id="new-total-${p.id}">
-              —
+            <td style="text-align:right;color:var(--text-secondary);font-variant-numeric:tabular-nums;" id="prev-counter-${p.id}">
+              ${fmtNum(prevCounter)}
             </td>
             <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;" id="diff-total-${p.id}" class="diff-preview diff-zero">
               —
@@ -522,62 +460,35 @@ async function loadRecordForm() {
 }
 
 function updateDiff(printerId) {
-  const bwInput = document.getElementById(`ci-bw-${printerId}`);
-  const colorInput = document.getElementById(`ci-color-${printerId}`);
+  const input = document.getElementById(`ci-counter-${printerId}`);
+  if (!input) return;
   
-  if (!bwInput) return;
-  
-  const prevBW = bwInput.dataset.prev !== '' ? Number(bwInput.dataset.prev) : 0;
-  const currBW = bwInput.value !== '' ? Number(bwInput.value) : null;
-  
-  let prevColor = 0;
-  let currColor = null;
-  
-  if (colorInput && !colorInput.disabled) {
-    prevColor = colorInput.dataset.prev !== '' ? Number(colorInput.dataset.prev) : 0;
-    currColor = colorInput.value !== '' ? Number(colorInput.value) : null;
-  }
+  const prev = input.dataset.prev !== '' ? Number(input.dataset.prev) : 0;
+  const curr = input.value !== '' ? Number(input.value) : null;
   
   // Highlight inputs if they changed from their previous values
-  bwInput.classList.toggle('changed', bwInput.value !== (bwInput.dataset.prev || ''));
-  if (colorInput && !colorInput.disabled) {
-    colorInput.classList.toggle('changed', colorInput.value !== (colorInput.dataset.prev || ''));
-  }
+  input.classList.toggle('changed', input.value !== (input.dataset.prev || ''));
   
-  const prevTotal = prevBW + prevColor;
-  const newTotalEl = document.getElementById(`new-total-${printerId}`);
-  const diffTotalEl = document.getElementById(`diff-total-${printerId}`);
-  
-  // If no new readings entered, show blank / default state
-  if (currBW === null && (colorInput === null || colorInput.disabled || currColor === null)) {
-    if (newTotalEl) newTotalEl.textContent = '—';
-    if (diffTotalEl) {
-      diffTotalEl.textContent = '—';
-      diffTotalEl.className = 'diff-preview diff-zero';
+  const diffEl = document.getElementById(`diff-total-${printerId}`);
+  if (curr === null) {
+    if (diffEl) {
+      diffEl.textContent = '—';
+      diffEl.className = 'diff-preview diff-zero';
     }
     return;
   }
   
-  // Calculate total new counter (if one field is empty, fallback to its previous value)
-  const activeBW = currBW !== null ? currBW : prevBW;
-  const activeColor = currColor !== null ? currColor : prevColor;
-  const totalNew = activeBW + activeColor;
-  
-  if (newTotalEl) {
-    newTotalEl.textContent = fmtNum(totalNew);
-  }
-  
-  if (diffTotalEl) {
-    const diff = totalNew - prevTotal;
+  if (diffEl) {
+    const diff = curr - prev;
     if (diff > 0) {
-      diffTotalEl.textContent = `▲ ${fmtNum(diff)}`;
-      diffTotalEl.className = 'diff-preview diff-positive';
+      diffEl.textContent = `▲ ${fmtNum(diff)}`;
+      diffEl.className = 'diff-preview diff-positive';
     } else if (diff < 0) {
-      diffTotalEl.textContent = `⚠️ ${fmtNum(diff)}`;
-      diffTotalEl.className = 'diff-preview diff-negative';
+      diffEl.textContent = `⚠️ ${fmtNum(diff)}`;
+      diffEl.className = 'diff-preview diff-negative';
     } else {
-      diffTotalEl.textContent = '0';
-      diffTotalEl.className = 'diff-preview diff-zero';
+      diffEl.textContent = '0';
+      diffEl.className = 'diff-preview diff-zero';
     }
   }
 }
@@ -589,21 +500,17 @@ async function saveAllRecords() {
 
   const entries = [];
   printers.forEach(p => {
-    const bwInput = document.getElementById(`ci-bw-${p.id}`);
-    const colorInput = document.getElementById(`ci-color-${p.id}`);
+    const input = document.getElementById(`ci-counter-${p.id}`);
     const noteInput = document.getElementById(`note-${p.id}`);
 
-    if (bwInput && colorInput) {
-      const counterBW = bwInput.value !== '' ? Number(bwInput.value) : null;
-      const counterColor = colorInput.value !== '' ? Number(colorInput.value) : null;
+    if (input) {
+      const counter = input.value !== '' ? Number(input.value) : null;
       const note = noteInput ? noteInput.value : '';
 
-      // เก็บประวัติถ้าระบุค่าใดค่าหนึ่ง
-      if (counterBW !== null || counterColor !== null) {
+      if (counter !== null) {
         entries.push({
           printerId: p.id,
-          counterBW: counterBW || 0,
-          counterColor: counterColor || 0,
+          counter: counter,
           note: note
         });
       }
@@ -681,10 +588,10 @@ async function loadHistory() {
       // แสดงเฉพาะเครื่องที่มีประวัติบันทึกอย่างน้อย 1 ครั้งใน 3 เดือนนี้
       if (!st1 && !st2 && !st3) continue;
 
-      // คำนวณยอดรวมสะสม (ขาวดำ + สี)
-      const tot1 = st1 ? ((st1.counterBW || 0) + (st1.counterColor || 0)) : null;
-      const tot2 = st2 ? ((st2.counterBW || 0) + (st2.counterColor || 0)) : null;
-      const tot3 = st3 ? ((st3.counterBW || 0) + (st3.counterColor || 0)) : null;
+      // คำนวณยอดสะสม
+      const tot1 = st1 ? (st1.counter !== undefined ? st1.counter : null) : null;
+      const tot2 = st2 ? (st2.counter !== undefined ? st2.counter : null) : null;
+      const tot3 = st3 ? (st3.counter !== undefined ? st3.counter : null) : null;
 
       const val1 = tot1 !== null ? fmtNum(tot1) : '—';
       const val2 = tot2 !== null ? fmtNum(tot2) : '—';
@@ -705,9 +612,9 @@ async function loadHistory() {
           diffText = '0';
           diffClass = 'diff-zero';
         }
-      } else if (st1 && (st1.usedBW !== null || st1.usedColor !== null)) {
+      } else if (st1 && st1.used !== null) {
         // หากไม่มีข้อมูลเดือนก่อนหน้าโดยตรง แต่มีข้อมูลที่ระบบเคยคำนวณชดเชยย้อนหลังให้
-        const diff = (st1.usedBW || 0) + (st1.usedColor || 0);
+        const diff = st1.used || 0;
         if (diff > 0) {
           diffText = `+${fmtNum(diff)}`;
           diffClass = 'diff-positive';
@@ -872,9 +779,9 @@ function exportCSV() {
 
     if (!st1 && !st2 && !st3) continue;
 
-    const tot1 = st1 ? ((st1.counterBW || 0) + (st1.counterColor || 0)) : null;
-    const tot2 = st2 ? ((st2.counterBW || 0) + (st2.counterColor || 0)) : null;
-    const tot3 = st3 ? ((st3.counterBW || 0) + (st3.counterColor || 0)) : null;
+    const tot1 = st1 ? (st1.counter !== undefined ? st1.counter : null) : null;
+    const tot2 = st2 ? (st2.counter !== undefined ? st2.counter : null) : null;
+    const tot3 = st3 ? (st3.counter !== undefined ? st3.counter : null) : null;
 
     const val1 = tot1 !== null ? tot1 : '—';
     const val2 = tot2 !== null ? tot2 : '—';
@@ -884,8 +791,8 @@ function exportCSV() {
     if (tot1 !== null && tot2 !== null) {
       const diff = tot1 - tot2;
       diffText = diff >= 0 ? `+${diff}` : `${diff}`;
-    } else if (st1 && (st1.usedBW !== null || st1.usedColor !== null)) {
-      const diff = (st1.usedBW || 0) + (st1.usedColor || 0);
+    } else if (st1 && st1.used !== null) {
+      const diff = st1.used || 0;
       diffText = diff >= 0 ? `+${diff}` : `${diff}`;
     }
 
@@ -1131,13 +1038,9 @@ function openPrinterDetail(printerId) {
   let rows = monthKeys.map(m => {
     const st = (stats[m] || {})[printerId];
     if (!st) return null;
-    const usedBW    = st.usedBW    != null ? st.usedBW    : null;
-    const usedColor = st.usedColor != null ? st.usedColor : null;
-    const usedTotal = (usedBW !== null || usedColor !== null)
-      ? (usedBW || 0) + (usedColor || 0) : null;
-    const counterTotal = (st.counterBW || 0) + (st.counterColor || 0);
+    const used = st.used != null ? st.used : null;
+    const counter = st.counter != null ? st.counter : 0;
 
-    const fmtUsed = (v) => v == null ? '—' : (v >= 0 ? `<span style="color:#10b981">+${fmtNum(v)}</span>` : `<span style="color:#ef4444">${fmtNum(v)}</span>`);
     const fmtUsedTotal = (v) => v == null ? '—'
       : v > 0  ? `<span style="font-weight:700;color:#a78bfa">+${fmtNum(v)}</span>`
       : v < 0  ? `<span style="font-weight:700;color:#ef4444">${fmtNum(v)}</span>`
@@ -1146,12 +1049,8 @@ function openPrinterDetail(printerId) {
     return `
       <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
         <td style="font-weight:600;color:var(--accent-light);padding:7px 10px">${thMonth(m)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtNum(st.counterBW)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;color:#f59e0b;padding:7px 10px">${fmtNum(st.counterColor)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px;color:#94a3b8;font-size:0.78rem">${fmtNum(counterTotal)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtUsed(usedBW)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtUsed(usedColor)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px;background:rgba(124,58,237,0.07);border-left:1px solid rgba(124,58,237,0.2)">${fmtUsedTotal(usedTotal)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px">${fmtNum(counter)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;padding:7px 10px;background:rgba(124,58,237,0.07);border-left:1px solid rgba(124,58,237,0.2)">${fmtUsedTotal(used)}</td>
       </tr>`;
   }).filter(Boolean).join('');
 
@@ -1167,23 +1066,14 @@ function openPrinterDetail(printerId) {
           <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">เลือกเดือน</label>
           <input type="month" id="modal-record-month" class="month-input" style="width:100%;margin:0;height:38px;padding:8px 10px;" onchange="onModalMonthChange('${p.id}')" />
         </div>
-        <div style="flex:1.2;min-width:170px;">
-          <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">⬛ ขาวดำ (เดิม: <span id="modal-prev-bw-label">—</span>)</label>
+        <div style="flex:2;min-width:220px;">
+          <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">มิเตอร์สะสม (เดิม: <span id="modal-prev-counter-label">—</span>)</label>
           <div style="display:flex;align-items:center;gap:4px;">
-            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" onclick="adjustModalValue('bw', -100, '${p.id}')">-100</button>
-            <input type="number" id="modal-ci-bw" class="counter-input" style="flex:1;height:38px;width:100%;text-align:center;padding:6px 4px;" placeholder="กรอกมิเตอร์" oninput="updateModalDiff('${p.id}')" />
-            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" onclick="adjustModalValue('bw', 100, '${p.id}')">+100</button>
+            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" onclick="adjustModalValue(-100, '${p.id}')">-100</button>
+            <input type="number" id="modal-ci-counter" class="counter-input" style="flex:1;height:38px;width:100%;text-align:center;padding:6px 4px;" placeholder="กรอกมิเตอร์" oninput="updateModalDiff('${p.id}')" />
+            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" onclick="adjustModalValue(100, '${p.id}')">+100</button>
           </div>
-          <div id="modal-diff-bw" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
-        </div>
-        <div style="flex:1.2;min-width:170px; ${p.type === 'ขาวดำ' ? 'opacity:0.3;pointer-events:none;' : ''}">
-          <label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;">🎨 สี (เดิม: <span id="modal-prev-color-label">—</span>)</label>
-          <div style="display:flex;align-items:center;gap:4px;">
-            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" ${p.type === 'ขาวดำ' ? 'disabled' : ''} onclick="adjustModalValue('color', -100, '${p.id}')">-100</button>
-            <input type="number" id="modal-ci-color" class="counter-input" style="flex:1;height:38px;width:100%;text-align:center;padding:6px 4px;" placeholder="กรอกมิเตอร์" ${p.type === 'ขาวดำ' ? 'disabled' : ''} oninput="updateModalDiff('${p.id}')" />
-            <button type="button" class="btn-icon" style="height:38px;width:38px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--text-secondary);" ${p.type === 'ขาวดำ' ? 'disabled' : ''} onclick="adjustModalValue('color', 100, '${p.id}')">+100</button>
-          </div>
-          <div id="modal-diff-color" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
+          <div id="modal-diff-counter" class="diff-preview diff-zero" style="margin-top:2px;font-size:0.75rem;">—</div>
         </div>
       </div>
       <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;">
@@ -1214,15 +1104,11 @@ function openPrinterDetail(printerId) {
         <thead>
           <tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;z-index:1">
             <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)">เดือน</th>
-            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border)">⬛ B&W</th>
-            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border)">🎨 สี</th>
-            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#94a3b8;font-size:0.72rem">รวมสะสม</th>
-            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#10b981">ใช้ B&W</th>
-            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#f59e0b">ใช้ สี</th>
-            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#a78bfa;background:rgba(124,58,237,0.08);border-left:1px solid rgba(124,58,237,0.2)">✨ รวมใช้ไป</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border)">มิเตอร์สะสม</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);color:#a78bfa;background:rgba(124,58,237,0.08);border-left:1px solid rgba(124,58,237,0.2)">✨ ใช้ไป</th>
           </tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-muted)">ไม่มีข้อมูล</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--text-muted)">ไม่มีข้อมูล</td></tr>'}</tbody>
       </table>
     </div>
   `;
@@ -1265,32 +1151,21 @@ function onModalMonthChange(printerId) {
     }
   }
 
-  const prevBWVal = prevRec ? (prevRec.counterBW || 0) : 0;
-  const prevColorVal = prevRec ? (prevRec.counterColor || 0) : 0;
+  const prevVal = prevRec ? (prevRec.counter !== undefined ? prevRec.counter : (prevRec.counterBW || 0)) : 0;
 
   // อัปเดตการแสดงผลมิเตอร์เดิมบนป้าย label
-  document.getElementById('modal-prev-bw-label').textContent = fmtNum(prevBWVal);
-  if (document.getElementById('modal-prev-color-label')) {
-    document.getElementById('modal-prev-color-label').textContent = fmtNum(prevColorVal);
-  }
+  document.getElementById('modal-prev-counter-label').textContent = fmtNum(prevVal);
 
-  const inputBW = document.getElementById('modal-ci-bw');
-  const inputColor = document.getElementById('modal-ci-color');
-
-  inputBW.dataset.prev = prevBWVal;
-  if (inputColor) inputColor.dataset.prev = prevColorVal;
+  const input = document.getElementById('modal-ci-counter');
+  input.dataset.prev = prevVal;
 
   // ตรวจสอบว่าเดือนนี้เคยบันทึกไปแล้วหรือไม่ หากมีให้ดึงมาแสดงเพื่อทำการแก้ไขได้
   const currentRecord = [...records].reverse().find(r => r.printerId === p.id && r.month === month);
   if (currentRecord) {
-    inputBW.value = currentRecord.counterBW !== undefined ? currentRecord.counterBW : '';
-    if (inputColor && p.type === 'สี') {
-      inputColor.value = currentRecord.counterColor !== undefined ? currentRecord.counterColor : '';
-    }
+    input.value = currentRecord.counter !== undefined ? currentRecord.counter : '';
     document.getElementById('modal-record-note').value = currentRecord.note || '';
   } else {
-    inputBW.value = '';
-    if (inputColor) inputColor.value = '';
+    input.value = '';
     document.getElementById('modal-record-note').value = '';
   }
 
@@ -1302,36 +1177,34 @@ function updateModalDiff(printerId) {
   const p = printers.find(x => x.id === printerId);
   if (!p) return;
 
-  ['bw', 'color'].forEach(type => {
-    const input = document.getElementById(`modal-ci-${type}`);
-    if (!input || input.disabled) return;
+  const input = document.getElementById('modal-ci-counter');
+  if (!input || input.disabled) return;
 
-    const prev = input.dataset.prev !== '' ? Number(input.dataset.prev) : null;
-    const curr = input.value !== '' ? Number(input.value) : null;
-    const diffEl = document.getElementById(`modal-diff-${type}`);
+  const prev = input.dataset.prev !== '' ? Number(input.dataset.prev) : null;
+  const curr = input.value !== '' ? Number(input.value) : null;
+  const diffEl = document.getElementById('modal-diff-counter');
 
-    if (curr === null || prev === null) {
-      diffEl.textContent = '—';
-      diffEl.className = 'diff-preview diff-zero';
-      return;
-    }
+  if (curr === null || prev === null) {
+    diffEl.textContent = '—';
+    diffEl.className = 'diff-preview diff-zero';
+    return;
+  }
 
-    const diff = curr - prev;
-    if (diff > 0) {
-      diffEl.textContent = `▲ ${fmtNum(diff)} แผ่น`;
-      diffEl.className = 'diff-preview diff-positive';
-    } else if (diff < 0) {
-      diffEl.textContent = `⚠️ ${fmtNum(diff)}`;
-      diffEl.className = 'diff-preview diff-negative';
-    } else {
-      diffEl.textContent = '0 แผ่น';
-      diffEl.className = 'diff-preview diff-zero';
-    }
-  });
+  const diff = curr - prev;
+  if (diff > 0) {
+    diffEl.textContent = `▲ ${fmtNum(diff)} แผ่น`;
+    diffEl.className = 'diff-preview diff-positive';
+  } else if (diff < 0) {
+    diffEl.textContent = `⚠️ ${fmtNum(diff)}`;
+    diffEl.className = 'diff-preview diff-negative';
+  } else {
+    diffEl.textContent = '0 แผ่น';
+    diffEl.className = 'diff-preview diff-zero';
+  }
 }
 
-function adjustModalValue(type, amount, printerId) {
-  const input = document.getElementById(`modal-ci-${type}`);
+function adjustModalValue(amount, printerId) {
+  const input = document.getElementById('modal-ci-counter');
   if (!input || input.disabled) return;
 
   const prev = input.dataset.prev !== '' ? Number(input.dataset.prev) : 0;
@@ -1347,22 +1220,19 @@ async function saveSingleRecord(printerId) {
   const month = document.getElementById('modal-record-month').value;
   if (!month) return showToast('กรุณาเลือกเดือน', 'error');
 
-  const bwInput = document.getElementById('modal-ci-bw');
-  const colorInput = document.getElementById('modal-ci-color');
+  const input = document.getElementById('modal-ci-counter');
   const noteInput = document.getElementById('modal-record-note');
 
-  const counterBW = bwInput.value !== '' ? Number(bwInput.value) : null;
-  const counterColor = (colorInput && !colorInput.disabled && colorInput.value !== '') ? Number(colorInput.value) : 0;
+  const counter = input.value !== '' ? Number(input.value) : null;
   const note = noteInput ? noteInput.value : '';
 
-  if (counterBW === null) {
-    return showToast('⚠️ กรุณากรอกข้อมูลมิเตอร์ขาวดำก่อนกดบันทึก', 'warning');
+  if (counter === null) {
+    return showToast('⚠️ กรุณากรอกข้อมูลมิเตอร์สะสมก่อนกดบันทึก', 'warning');
   }
 
   const entries = [{
     printerId: printerId,
-    counterBW: counterBW,
-    counterColor: counterColor,
+    counter: counter,
     note: note
   }];
 
@@ -1399,25 +1269,19 @@ function showOverallDetail() {
   const latM = latestMonth();
   const monthStats = stats[latM] || {};
 
-  const totalBW = Object.values(monthStats).reduce((s, v) => s + (v.counterBW || 0), 0);
-  const totalColor = Object.values(monthStats).reduce((s, v) => s + (v.counterColor || 0), 0);
-  const totalUsedBW = Object.values(monthStats).reduce((s, v) => s + (v.usedBW || 0), 0);
-  const totalUsedColor = Object.values(monthStats).reduce((s, v) => s + (v.usedColor || 0), 0);
+  const totalCounter = Object.values(monthStats).reduce((s, v) => s + (v.counter || 0), 0);
+  const totalUsed = Object.values(monthStats).reduce((s, v) => s + (v.used || 0), 0);
 
   let rows = printers.map(p => {
     const st = monthStats[p.id];
-    const bw = st ? st.counterBW : null;
-    const color = st ? st.counterColor : null;
-    const usedBW = st ? st.usedBW : null;
-    const usedColor = st ? st.usedColor : null;
+    const counter = st ? st.counter : null;
+    const used = st ? st.used : null;
     return `
       <tr>
         <td style="font-weight:600;color:${ZONE_COLORS[p.zone] || '#94a3b8'}">${p.zone}</td>
         <td>${p.location}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${bw !== null ? fmtNum(bw) : '—'}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;color:#f59e0b">${color !== null ? fmtNum(color) : '—'}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${usedBW != null ? fmtNum(usedBW) : '—'}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;color:#f59e0b">${usedColor != null ? fmtNum(usedColor) : '—'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${counter !== null ? fmtNum(counter) : '—'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${used != null ? fmtNum(used) : '—'}</td>
       </tr>`;
   }).join('');
 
@@ -1427,10 +1291,8 @@ function showOverallDetail() {
     <div style="margin-bottom:20px">
       <div style="font-size:1rem;font-weight:600;margin-bottom:4px">📊 ${thMonth(latM)}</div>
       <div style="display:flex;gap:24px;margin-top:12px;flex-wrap:wrap">
-        <div><span style="color:var(--text-muted)">⬛ B&W รวม:</span> <b>${fmtNum(totalBW)}</b></div>
-        <div><span style="color:var(--text-muted)">🎨 สี รวม:</span> <b style="color:#f59e0b">${fmtNum(totalColor)}</b></div>
-        <div><span style="color:var(--text-muted)">ใช้ B&W:</span> <b style="color:#10b981">${totalUsedBW > 0 ? fmtNum(totalUsedBW) : '—'}</b></div>
-        <div><span style="color:var(--text-muted)">ใช้ สี:</span> <b style="color:#f59e0b">${totalUsedColor > 0 ? fmtNum(totalUsedColor) : '—'}</b></div>
+        <div><span style="color:var(--text-muted)">มิเตอร์สะสมรวม:</span> <b>${fmtNum(totalCounter)}</b></div>
+        <div><span style="color:var(--text-muted)">ยอดใช้ไปรวม:</span> <b style="color:#10b981">${totalUsed > 0 ? fmtNum(totalUsed) : '—'}</b></div>
       </div>
     </div>
     <div style="max-height:360px;overflow-y:auto">
@@ -1439,10 +1301,8 @@ function showOverallDetail() {
           <tr style="background:rgba(255,255,255,0.05)">
             <th style="text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)">แผนก</th>
             <th style="text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)">ห้อง/สถานที่</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">⬛ B&W ล่าสุด</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">🎨 สี ล่าสุด</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">ใช้ B&W</th>
-            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">ใช้ สี</th>
+            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">มิเตอร์สะสมล่าสุด</th>
+            <th style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)">ใช้ไปเดือนนี้</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1575,20 +1435,14 @@ async function fetchRealtimeCounters() {
       
       for (const pid in results) {
         const item = results[pid];
-        const bwInput = document.getElementById(`ci-bw-${pid}`);
-        const colorInput = document.getElementById(`ci-color-${pid}`);
+        const input = document.getElementById(`ci-counter-${pid}`);
         
-        let changed = false;
-        if (bwInput && item.counterBW !== undefined && item.counterBW > 0) {
-          bwInput.value = item.counterBW;
-          changed = true;
-        }
-        if (colorInput && item.counterColor !== undefined && item.counterColor > 0 && !colorInput.disabled) {
-          colorInput.value = item.counterColor;
-          changed = true;
-        }
-        
-        if (changed) {
+        let val = 0;
+        if (item.counter !== undefined) val = item.counter;
+        else val = (item.counterBW || 0) + (item.counterColor || 0);
+
+        if (input && val > 0) {
+          input.value = val;
           updateDiff(pid);
           count++;
         }
