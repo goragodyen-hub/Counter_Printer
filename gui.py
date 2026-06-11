@@ -572,7 +572,7 @@ class PrinterMonitorApp(tk.Tk):
         self.render_summary()
 
     def render_summary(self):
-        """แสดงแถบสรุปยอดรวม BW + สี รวมทุกเครื่อง และแยกตามโซน"""
+        """แสดงแถบสรุปยอดรวมสะสม รวมทุกเครื่อง และแยกตามโซน"""
         for widget in self.summary_frame.winfo_children():
             widget.destroy()
 
@@ -626,7 +626,7 @@ class PrinterMonitorApp(tk.Tk):
         def fmt(n):
             return f"{n:,}" if n else "—"
 
-        def make_zone_card(parent, zone_name, bw, color, count, bg_col, accent_col):
+        def make_zone_card(parent, zone_name, total_val, count, bg_col, accent_col):
             card = tk.Frame(parent, bg=bg_col, padx=12, pady=8,
                             highlightthickness=1, highlightbackground="#334155")
             card.pack(side="left", padx=(0, 8), fill="y")
@@ -637,33 +637,14 @@ class PrinterMonitorApp(tk.Tk):
             tk.Label(card, text=f"{count} เครื่องออนไลน์",
                      font=("Segoe UI", 7), fg=TEXT_GRAY, bg=bg_col).pack(anchor="w", pady=(0, 4))
 
-            # BW
-            bw_row = tk.Frame(card, bg=bg_col)
-            bw_row.pack(fill="x")
-            tk.Label(bw_row, text="⬛ BW:", font=("Segoe UI", 8),
-                     fg=TEXT_GRAY, bg=bg_col).pack(side="left")
-            tk.Label(bw_row, text=fmt(bw), font=("Segoe UI", 9, "bold"),
-                     fg=BW_COLOR, bg=bg_col).pack(side="right")
-
-            # Color
-            c_row = tk.Frame(card, bg=bg_col)
-            c_row.pack(fill="x", pady=(2, 0))
-            tk.Label(c_row, text="🎨 สี:", font=("Segoe UI", 8),
-                     fg=TEXT_GRAY, bg=bg_col).pack(side="left")
-            tk.Label(c_row, text=fmt(color), font=("Segoe UI", 9, "bold"),
-                     fg=COLOR_COLOR, bg=bg_col).pack(side="right")
-
-            # Total
+            # Total Row
             tot_row = tk.Frame(card, bg=bg_col)
-            tot_row.pack(fill="x", pady=(4, 0))
-            sep2 = tk.Label(card, text="─" * 20, font=("Consolas", 7),
-                            fg="#334155", bg=bg_col)
-            sep2.pack(fill="x")
-            tk.Label(tot_row, text="รวม:", font=("Segoe UI", 8),
+            tot_row.pack(fill="x", pady=(6, 0))
+            tk.Label(tot_row, text="📊 ยอดรวมสะสม:", font=("Segoe UI", 8),
                      fg=TEXT_GRAY, bg=bg_col).pack(side="left")
-            tk.Label(tot_row, text=fmt(bw + color),
+            tk.Label(tot_row, text=fmt(total_val),
                      font=("Segoe UI", 10, "bold"),
-                     fg="#f8fafc", bg=bg_col).pack(side="right")
+                     fg="#f8fafc", bg=bg_col).pack(side="right", padx=(8, 0))
 
         # Zone cards
         for zone in ZONES_ORDER:
@@ -672,7 +653,7 @@ class PrinterMonitorApp(tk.Tk):
             zt = zone_totals[zone]
             zcol = ZONE_COLORS.get(zone, ACCENT)
             make_zone_card(cards_row, zone,
-                           zt["bw"], zt["color"], zt["count"],
+                           zt["bw"] + zt["color"], zt["count"],
                            BG_CARD, zcol)
 
         # Grand total card
@@ -687,32 +668,13 @@ class PrinterMonitorApp(tk.Tk):
                  font=("Segoe UI", 7), fg=TEXT_GRAY,
                  bg="#1e1b4b").pack(anchor="w", pady=(0, 4))
 
-        bw_g = tk.Frame(grand_card, bg="#1e1b4b")
-        bw_g.pack(fill="x")
-        tk.Label(bw_g, text="⬛ BW:", font=("Segoe UI", 8),
-                 fg=TEXT_GRAY, bg="#1e1b4b").pack(side="left")
-        tk.Label(bw_g, text=fmt(total_bw),
-                 font=("Segoe UI", 10, "bold"), fg=BW_COLOR,
-                 bg="#1e1b4b").pack(side="right")
-
-        c_g = tk.Frame(grand_card, bg="#1e1b4b")
-        c_g.pack(fill="x", pady=(2, 0))
-        tk.Label(c_g, text="🎨 สี:", font=("Segoe UI", 8),
-                 fg=TEXT_GRAY, bg="#1e1b4b").pack(side="left")
-        tk.Label(c_g, text=fmt(total_color),
-                 font=("Segoe UI", 10, "bold"), fg=COLOR_COLOR,
-                 bg="#1e1b4b").pack(side="right")
-
-        tk.Label(grand_card, text="─" * 22, font=("Consolas", 7),
-                 fg="#4338ca", bg="#1e1b4b").pack(fill="x")
-
         tot_g = tk.Frame(grand_card, bg="#1e1b4b")
-        tot_g.pack(fill="x")
-        tk.Label(tot_g, text="รวม:", font=("Segoe UI", 8),
+        tot_g.pack(fill="x", pady=(6, 0))
+        tk.Label(tot_g, text="🏆 ยอดรวมทั้งหมด:", font=("Segoe UI", 8),
                  fg=TEXT_GRAY, bg="#1e1b4b").pack(side="left")
         tk.Label(tot_g, text=fmt(total_bw + total_color),
                  font=("Segoe UI", 12, "bold"), fg="#a78bfa",
-                 bg="#1e1b4b").pack(side="right")
+                 bg="#1e1b4b").pack(side="right", padx=(8, 0))
             
     def load_printers(self):
         # ดึงข้อมูลเครื่องพิมพ์ล่าสุดจาก Google Sheets มาอัปเดตไฟล์ในเครื่องเบื้องหลัง (Background Thread)
@@ -823,7 +785,7 @@ class PrinterMonitorApp(tk.Tk):
         # Main Card Frame
         card_frame = tk.Frame(parent, bg=BG_CARD, bd=0, padx=16, pady=16, highlightthickness=1, highlightbackground="#334155")
         
-        # Header: Zone Badge and Type Badge
+        # Header: Zone Badge
         header = tk.Frame(card_frame, bg=BG_CARD)
         header.pack(fill="x", pady=(0, 8))
         
@@ -838,19 +800,6 @@ class PrinterMonitorApp(tk.Tk):
             pady=2
         )
         zone_lbl.pack(side="left")
-        
-        type_txt = "🎨 สี" if p_type == "สี" else "⬛ ขาวดำ"
-        type_col = COLOR_COLOR if p_type == "สี" else TEXT_GRAY
-        type_lbl = tk.Label(
-            header,
-            text=type_txt,
-            font=self.font_badge,
-            fg=type_col,
-            bg="#0f172a",
-            padx=6,
-            pady=2
-        )
-        type_lbl.pack(side="right")
         
         # Location Name
         loc_lbl = tk.Label(
@@ -909,28 +858,24 @@ class PrinterMonitorApp(tk.Tk):
         counters_frame = tk.Frame(card_frame, bg=BG_CARD)
         counters_frame.pack(fill="x")
         
-        # Black and White Counter (Shown always)
-        bw_row = tk.Frame(counters_frame, bg=BG_CARD)
-        bw_row.pack(fill="x", pady=2)
+        # Unified Total Counter Row
+        tot_row = tk.Frame(counters_frame, bg=BG_CARD)
+        tot_row.pack(fill="x", pady=2)
         
-        bw_label = tk.Label(bw_row, text="⬛ ขาวดำ (BW) :", font=self.font_bold, fg=TEXT_GRAY, bg=BG_CARD)
-        bw_label.pack(side="left")
+        tot_label = tk.Label(tot_row, text="📊 ยอดรวมสะสม :", font=self.font_bold, fg=TEXT_GRAY, bg=BG_CARD)
+        tot_label.pack(side="left")
         
-        formatted_bw = f"{bw_val:,}" if isinstance(bw_val, int) else bw_val
-        bw_val_lbl = tk.Label(bw_row, text=formatted_bw, font=("Segoe UI", 12, "bold"), fg=BW_COLOR, bg=BG_CARD)
-        bw_val_lbl.pack(side="right")
-        
-        # Color Counter (Shown only if printer type is 'สี')
-        if p_type == "สี":
-            color_row = tk.Frame(counters_frame, bg=BG_CARD)
-            color_row.pack(fill="x", pady=(6, 2))
+        # Calculate total counter
+        bw_n = bw_val if isinstance(bw_val, int) else 0
+        color_n = color_val if isinstance(color_val, int) else 0
+        if isinstance(bw_val, int) or isinstance(color_val, int):
+            total_val = bw_n + color_n
+            formatted_tot = f"{total_val:,}"
+        else:
+            formatted_tot = "—"
             
-            color_label = tk.Label(color_row, text="🎨 ยอดพิมพ์สี (Color) :", font=self.font_bold, fg=TEXT_GRAY, bg=BG_CARD)
-            color_label.pack(side="left")
-            
-            formatted_color = f"{color_val:,}" if isinstance(color_val, int) else color_val
-            color_val_lbl = tk.Label(color_row, text=formatted_color, font=("Segoe UI", 12, "bold"), fg=COLOR_COLOR, bg=BG_CARD)
-            color_val_lbl.pack(side="right")
+        tot_val_lbl = tk.Label(tot_row, text=formatted_tot, font=("Segoe UI", 12, "bold"), fg=TEXT_WHITE, bg=BG_CARD)
+        tot_val_lbl.pack(side="right")
             
         # Mute card visually if offline
         if not online and not self.is_scanning:
@@ -938,9 +883,7 @@ class PrinterMonitorApp(tk.Tk):
             status_lbl.configure(fg=TEXT_GRAY)
             loc_lbl.configure(fg=TEXT_GRAY)
             card_frame.configure(highlightbackground="#1e293b")
-            bw_val_lbl.configure(fg="#475569")
-            if p_type == "สี":
-                color_val_lbl.configure(fg="#475569")
+            tot_val_lbl.configure(fg="#475569")
                 
         return card_frame
         
@@ -1058,10 +1001,8 @@ class PrinterMonitorApp(tk.Tk):
             f"- ออนไลน์: {online_count} เครื่อง\n"
             f"- ออฟไลน์: {len(results) - online_count} เครื่อง\n"
             f"────────────────\n"
-            f"📊 ยอดมิเตอร์รวม (ออนไลน์):\n"
-            f"  ⬛ BW รวม : {total_bw:,} แผ่น\n"
-            f"  🎨 สี รวม : {total_color:,} แผ่น\n"
-            f"  🏆 รวมทั้งหมด : {total_bw + total_color:,} แผ่น"
+            f"📊 ยอดมิเตอร์รวมสะสม (ออนไลน์):\n"
+            f"  🏆 ยอดรวมทั้งหมด : {total_bw + total_color:,} แผ่น"
         )
 
 if __name__ == "__main__":
